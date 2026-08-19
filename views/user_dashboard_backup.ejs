@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة تحكم البوت</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="/style.css" rel="stylesheet">
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.4.4/build/qrcode.min.js"></script>
+    <style>
+        .main-content {
+            margin-right: 100px;
+            transition: all 0.3s;
+        }
+
+        @media (max-width: 992px) {
+            .main-content {
+                margin-right: 0;
+                margin-top: 100px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Navbar -->
+    <%- include('partials/navbar') %>
+
+        <!-- Sidebar -->
+        <%- include('partials/sidebar') %>
+
+            <div class="container main-content" style="padding-top: 100px;">
+                <div class="row justify-content-center">
+                    <div class="col-lg-10">
+                        <div class="glass-card p-5 text-center animate-fade-in">
+                            <h2 class="mb-2 fw-bold">إدارة الاتصال 🔌</h2>
+                            <p class="text-secondary mb-5">تحكم في حالة البوت ومسح كود QR</p>
+
+                            <div class="row g-4 mb-5">
+                                <div class="col-md-6">
+                                    <div class="p-4 rounded-4" style="background: rgba(0,0,0,0.2);">
+                                        <h5 class="m-0 text-secondary mb-3">حالة البوت</h5>
+                                        <div class="d-flex align-items-center justify-content-center gap-2">
+                                            <span id="status-dot"
+                                                class="status-dot <%= status === 'online' ? 'status-online' : 'status-offline' %>"></span>
+                                            <span id="status-text" class="fs-4 fw-bold">
+                                                <%= status==='online' ? 'متصل' : 'غير متصل' %>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="d-grid gap-3 h-100 align-content-center">
+                                        <button id="start-btn" class="btn btn-primary btn-lg rounded-pill">
+                                            <span class="d-flex align-items-center justify-content-center gap-2">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"
+                                                    fill="currentColor" class="bi bi-play-fill" viewBox="0 0 16 16">
+                                                    <path
+                                                        d="m11.596 8.697-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393z" />
+                                                </svg>
+                                                تشغيل / تحديث
+                                            </span>
+                                        </button>
+                                        <button id="stop-btn" class="btn btn-danger btn-lg rounded-pill"
+                                            style="opacity: 0.8;">
+                                            <span class="d-flex align-items-center justify-content-center gap-2">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"
+                                                    fill="currentColor" class="bi bi-stop-fill" viewBox="0 0 16 16">
+                                                    <path
+                                                        d="M5 3.5h6A1.5 1.5 0 0 1 12.5 5v6a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 11V5A1.5 1.5 0 0 1 5 3.5z" />
+                                                </svg>
+                                                إيقاف الاتصال
+                                            </span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="loader" class="mt-4 d-none">
+                                <div class="spinner-border text-primary" role="status"></div>
+                                <p class="mt-2 text-secondary">جاري إنشاء جلسة جديدة...</p>
+                            </div>
+
+                            <div id="qr-container" class="mt-4 animate-fade-in" style="display: none;">
+                                <div class="p-3 bg-white rounded-4 d-inline-block position-relative">
+                                    <canvas id="qr-canvas"></canvas>
+                                </div>
+
+                                <div class="mt-3" style="max-width: 300px; margin: 0 auto;">
+                                    <div class="progress" style="height: 6px; background: rgba(255,255,255,0.1);">
+                                        <div id="qr-progress" class="progress-bar bg-primary" role="progressbar"
+                                            style="width: 100%"></div>
+                                    </div>
+                                    <div class="d-flex justify-content-between text-secondary mt-1">
+                                        <small>سيتم تحديث الكود خلال</small>
+                                        <small id="timer-text">40ث</small>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <script>
+                const socket = io();
+                const userId = "<%= user.id %>";
+
+                socket.emit('join_room', `user_${userId}`);
+
+                const startBtn = document.getElementById('start-btn');
+                const stopBtn = document.getElementById('stop-btn');
+                const qrContainer = document.getElementById('qr-container');
+                const loader = document.getElementById('loader');
+                const statusText = document.getElementById('status-text');
+                const statusDot = document.getElementById('status-dot');
+                const qrCanvas = document.getElementById('qr-canvas');
+                const qrProgress = document.getElementById('qr-progress');
+                const timerText = document.getElementById('timer-text');
+
+                let timerInterval;
+
+                function startQrTimer() {
+                    clearInterval(timerInterval);
+                    let timeLeft = 20; // Baileys QR refresh time
+                    qrProgress.style.width = '100%';
+
+                    timerInterval = setInterval(() => {
+                        timeLeft--;
+                        const percentage = (timeLeft / 20) * 100;
+                        qrProgress.style.width = percentage + '%';
+                        timerText.innerText = timeLeft + 'ث';
+
+                        if (timeLeft <= 0) {
+                            clearInterval(timerInterval);
+                            timerText.innerText = 'جاري التحديث...';
+                        }
+                    }, 1000);
+                }
+
+                socket.on('qr_code', (qr) => {
+                    loader.classList.add('d-none');
+                    qrContainer.style.display = 'block';
+                    startQrTimer();
+                    QRCode.toCanvas(qrCanvas, qr, { width: 280, margin: 2 }, function (error) {
+                        if (error) console.error(error)
+                    });
+                });
+
+                socket.on('status', (status) => {
+                    if (status === 'online') {
+                        statusText.innerText = 'متصل';
+                        statusDot.className = 'status-dot status-online';
+                        qrContainer.style.display = 'none';
+                        clearInterval(timerInterval);
+                        loader.classList.add('d-none');
+                    } else {
+                        statusText.innerText = 'غير متصل';
+                        statusDot.className = 'status-dot status-offline';
+                    }
+                });
+
+                startBtn.addEventListener('click', async () => {
+                    console.log('Start button clicked');
+                    loader.classList.remove('d-none');
+                    qrContainer.style.display = 'none';
+                    startBtn.disabled = true;
+
+                    try {
+                        const response = await fetch('/dashboard/start-bot', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            }
+                        });
+
+                        const data = await response.json();
+                        console.log('Response:', data);
+
+                        if (!response.ok) {
+                            throw new Error(data.message || 'فشل بدء البوت');
+                        }
+                    } catch (err) {
+                        console.error('Error starting bot:', err);
+                        alert('حدث خطأ: ' + err.message);
+                        loader.classList.add('d-none');
+                    } finally {
+                        startBtn.disabled = false;
+                    }
+                });
+
+                stopBtn.addEventListener('click', async () => {
+                    if (confirm('هل أنت متأكد من إيقاف الردود التلقائية؟')) {
+                        console.log('Stop button clicked');
+                        stopBtn.disabled = true;
+
+                        try {
+                            statusText.innerText = 'جاري الإيقاف...';
+
+                            const response = await fetch('/dashboard/stop-bot', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                }
+                            });
+
+                            const data = await response.json();
+                            console.log('Response:', data);
+
+                            if (!response.ok) {
+                                throw new Error(data.message || 'فشل إيقاف البوت');
+                            }
+
+                            statusText.innerText = 'الردود التلقائية متوقفة';
+                            statusDot.className = 'status-dot status-offline';
+                            qrContainer.style.display = 'none';
+
+                            setTimeout(() => {
+                                location.reload();
+                            }, 1000);
+                        } catch (err) {
+                            console.error('Error stopping bot:', err);
+                            alert('حدث خطأ: ' + err.message);
+                            statusText.innerText = 'خطأ في الإيقاف';
+                        } finally {
+                            stopBtn.disabled = false;
+                        }
+                    }
+                });
+            </script>
+</body>
+
+</html>

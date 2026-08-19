@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>التدريب والمحاكاة الذكية</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="/style.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+</head>
+<body>
+    <%- include('partials/navbar') %>
+    <%- include('partials/sidebar') %>
+
+<style>
+    .training-wrapper {
+        display: flex;
+        flex-direction: row;
+        height: 65vh; /* تقليل الطول ليكون متناسب مع الشاشة */
+        min-height: 400px;
+        margin-top: 20px;
+        gap: 20px;
+    }
+    .training-chat-container {
+        flex: 3;
+        background: #1e1e2d;
+        border-radius: 12px;
+        display: flex;
+        flex-direction: column;
+        border: 1px solid #323248;
+        overflow: hidden;
+    }
+    .training-sidebar {
+        flex: 1;
+        background: #1e1e2d;
+        border-radius: 12px;
+        padding: 20px;
+        border: 1px solid #323248;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+    
+    /* Chat Area */
+    .chat-header {
+        background: #2b2b40;
+        padding: 15px 20px;
+        border-bottom: 1px solid #323248;
+        font-weight: bold;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .chat-messages {
+        flex: 1;
+        padding: 20px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+    }
+    .msg-bubble {
+        max-width: 80%;
+        padding: 12px 18px;
+        border-radius: 12px;
+        font-size: 14px;
+        line-height: 1.5;
+        position: relative;
+    }
+    .msg-user {
+        background: #3699ff;
+        color: white;
+        align-self: flex-start;
+        border-top-right-radius: 2px;
+    }
+    .msg-ai {
+        background: #2b2b40;
+        color: #e4e6ef;
+        align-self: flex-end;
+        border-top-left-radius: 2px;
+    }
+    
+    /* Input Area */
+    .chat-input-area {
+        padding: 15px;
+        background: #2b2b40;
+        border-top: 1px solid #323248;
+        display: flex;
+        gap: 10px;
+    }
+    .chat-input-area textarea {
+        flex: 1;
+        background: #1e1e2d;
+        border: 1px solid #323248;
+        color: white;
+        padding: 12px 15px;
+        border-radius: 8px;
+        outline: none;
+        resize: none;
+        min-height: 48px;
+        max-height: 150px;
+        overflow-y: auto;
+        line-height: 1.5;
+    }
+    .chat-input-area textarea:focus {
+        border-color: #3699ff;
+    }
+    .btn-send {
+        background: #3699ff;
+        color: white;
+        border: none;
+        padding: 0 20px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: 0.3s;
+        font-weight: bold;
+    }
+    .btn-send:hover {
+        background: #187de4;
+    }
+    
+    /* Stats Panel */
+    .stats-card {
+        background: #2b2b40;
+        padding: 15px;
+        border-radius: 8px;
+        text-align: center;
+    }
+    .stats-value {
+        font-size: 24px;
+        font-weight: bold;
+        color: #1bc5bd;
+        margin-top: 10px;
+    }
+
+    /* ===== Mobile Responsive ===== */
+    @media (max-width: 768px) {
+        .training-wrapper {
+            flex-direction: column;
+            height: auto;
+            min-height: unset;
+            gap: 16px;
+        }
+
+        .training-chat-container {
+            flex: none;
+            height: 55vh;
+            min-height: 320px;
+        }
+
+        .training-sidebar {
+            flex: none;
+        }
+
+        .msg-bubble {
+            max-width: 90%;
+            font-size: 13px;
+        }
+
+        .chat-header {
+            padding: 10px 14px;
+            font-size: 14px;
+        }
+
+        .chat-messages {
+            padding: 14px;
+            gap: 10px;
+        }
+
+        .chat-input-area {
+            padding: 10px;
+            gap: 8px;
+        }
+
+        .chat-input-area textarea {
+            padding: 10px 12px;
+            font-size: 14px;
+        }
+
+        .btn-send {
+            padding: 0 14px;
+            font-size: 14px;
+        }
+
+        /* تصغير الـ header على الموبيل */
+        h2.fw-bold {
+            font-size: 1.3rem;
+        }
+
+        /* الـ description row فوق بعض */
+        .row.mb-4 .col-md-6 {
+            margin-bottom: 8px;
+        }
+    }
+    /* ===== Chat Image Rendering ===== */
+    .msg-img-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 8px;
+    }
+    .msg-img-grid img {
+        width: 90px;
+        height: 90px;
+        object-fit: cover;
+        border-radius: 8px;
+        border: 1px solid rgba(255,255,255,0.15);
+        cursor: pointer;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .msg-img-grid img:hover {
+        transform: scale(1.08);
+        box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    }
+    .msg-img-label {
+        font-size: 11px;
+        color: rgba(255,255,255,0.45);
+        margin-top: 4px;
+        text-align: center;
+    }
+
+</style>
+
+<div class="container-fluid main-content px-4 px-lg-5 pb-5">
+    <div class="glass-card p-4 p-md-5 animate-fade-in" style="text-align: right;">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+            <h2 class="m-0 fw-bold text-white">🤖 تدريب الذكاء الاصطناعي</h2>
+            <button class="btn btn-primary rounded-pill px-4 shadow-sm" data-bs-toggle="modal" data-bs-target="#wizardModal">
+            <button class="btn btn-primary rounded-pill px-4 shadow-sm" data-bs-toggle="modal" data-bs-target="#wizardModal">
+                <i class="bi bi-magic me-1"></i> <%= (instructions && instructions.length > 0) ? 'تعديل إعدادات البوت' : 'إعداد البوت لأول مرة' %>
+            </button>
+        </div>
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <p class="text-white-50 small mb-1"><strong>شات التدريب:</strong> أعطِ البوت أوامر ليتعلمها (مثال: لو حد سألك على كذا قوله كذا).</p>
+            </div>
+            <div class="col-md-6">
+                <p class="text-white-50 small mb-1"><strong>شات الاختبار:</strong> اختبر البوت كأنك عميل لتتأكد من أنه حفظ التعليمات بشكل صحيح.</p>
+            </div>
+        </div>
+        
+        <div class="training-wrapper">
+            <!-- Teach Chat Panel (Right) -->
+            <div class="training-chat-container border border-info border-opacity-50">
+                <div class="chat-header" style="background: rgba(13, 202, 240, 0.1);">
+                    <span class="text-info fw-bold"><i class="bi bi-robot"></i> شات التعليمات</span>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-outline-info" id="btnListInstructions" title="عرض كل التعليمات"><i class="bi bi-list-ul"></i></button>
+                        <button class="btn btn-sm btn-outline-warning" id="btnAnalyzeConflicts" title="كشف التعارضات"><i class="bi bi-exclamation-triangle"></i></button>
+                        <button class="btn btn-sm btn-outline-danger" id="btnClearTeach" title="مسح المحادثة"><i class="bi bi-trash"></i></button>
+                    </div>
+                </div>
+                
+                <div class="chat-messages" id="teachContainer">
+                    <% if (!teachMessages || teachMessages.length === 0) { %>
+                        <div class="msg-bubble msg-ai bg-dark border border-info border-opacity-50 text-white">
+                            أهلاً بك يا مدير! أنا هنا مخصص لتلقي أوامرك وحفظها في قاعدة البيانات.
+                            <br><br>💡 <strong>أسهل طريقة للحفظ:</strong> اكتب لي مثلاً: 
+                            <br><i class="text-info">"لما حد يسألك عن سعر التوصيل، قوله 50 جنيه"</i>
+                            <br>أو <i class="text-info">"احفظ دي: مواعيد العمل من 10 الصبح لـ 10 بالليل"</i>
+                            <br><br>سيتم تخزين التعليمة مباشرة وسأؤكد لك حفظها لتقوم بتجربتها في الشات الآخر.
+                        </div>
+                    <% } %>
+                
+                    <% if (typeof teachMessages !== 'undefined' && teachMessages && teachMessages.length > 0) { %>
+                        <% teachMessages.forEach(msg => { %>
+                            <div class="msg-bubble <%= msg.role === 'user' ? 'msg-user bg-info text-dark' : 'msg-ai bg-dark border border-info border-opacity-50 text-white' %>">
+                                <%- msg.content.replace(/\n/g, '<br>') %>
+                            </div>
+                        <% }) %>
+                    <% } %>
+                </div>
+
+                <div class="chat-input-area border-0 p-3 pt-0" style="background: transparent;">
+                    <div id="teachTypingIndicator" class="text-muted small ms-2 mb-2" style="display: none; align-self: flex-start; width: 100%;">يتم استخراج البيانات...</div>
+                </div>
+                <div class="chat-input-area border-top border-info border-opacity-25" style="background: rgba(13, 202, 240, 0.05);">
+                    <textarea id="teachInput" class="bg-dark text-white border-info border-opacity-50" placeholder="أدخل تعليمة جديدة للبوت..." rows="1"></textarea>
+                    <button class="btn-send btn-info text-dark" id="btnTeachSend" title="حفظ التعليمة"><i class="bi bi-send-fill"></i></button>
+                </div>
+            </div>
+
+            <!-- Test Chat Panel (Left) -->
+            <div class="training-chat-container">
+                <div class="chat-header">
+                    <span><i class="bi bi-person"></i> شات الاختبار</span>
+                    <button class="btn btn-sm btn-outline-danger" id="btnClearChat" title="مسح المحادثة"><i class="bi bi-trash"></i></button>
+                </div>
+                
+                <div class="chat-messages" id="chatContainer">
+                    <% if (!messages || messages.length === 0) { %>
+                        <div class="msg-bubble msg-ai">
+                            أهلاً بيك 👋 أنا البوت وجاهز أرد عليك بناءً على التعليمات اللي أنت ضفتها! جرب تسألني أي سؤال.
+                        </div>
+                    <% } %>
+                
+                    <% if (messages && messages.length > 0) { %>
+                        <% messages.forEach(msg => { %>
+                            <div class="msg-bubble <%= msg.role === 'user' ? 'msg-user' : 'msg-ai' %>">
+                                <%- msg.content.replace(/\n/g, '<br>') %>
+                            </div>
+                        <% }) %>
+                    <% } %>
+                </div>
+                
+                <div class="chat-input-area border-0 p-3 pt-0" style="background: transparent;">
+                    <div id="typingIndicator" class="text-muted small ms-2 mb-2" style="display: none; align-self: flex-start; width: 100%;">البوت يكتب الآن...</div>
+                </div>
+                <div class="chat-input-area">
+                    <textarea id="chatInput" placeholder="اكتب رسالة لتجربة البوت..." rows="1"></textarea>
+                    <button class="btn-send" id="btnSend" title="إرسال"><i class="bi bi-send-fill"></i></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+</div>
+
+<!-- Wizard Modal -->
+<div class="modal fade" id="wizardModal" tabindex="-1" aria-hidden="true" dir="rtl">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content text-white" style="background: #1e293b; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);">
+            <div class="modal-header border-bottom border-light border-opacity-10">
+                <h5 class="modal-title fw-bold">✨ <%= (instructions && instructions.length > 0) ? 'تعديل إعدادات البوت' : 'إعداد البوت لأول مرة' %></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4" id="wizardBody">
+
+                <!-- Step 1: Role & Name -->
+                <div id="wizardStep1">
+                    <h6 class="fw-bold mb-3 text-info">الخطوة 1: الدور الوظيفي والاسم</h6>
+                    <label class="form-label">اختار اسم البوت:</label>
+                    <div class="d-flex flex-wrap gap-2 mb-3">
+                        <button class="btn btn-info rounded-pill active" onclick="selectWizardName(this, 'لينا')">لينا</button>
+                        <button class="btn btn-outline-info rounded-pill" onclick="selectWizardName(this, 'سيف')">سيف</button>
+                        <button class="btn btn-outline-info rounded-pill" onclick="selectWizardName(this, 'سارة')">سارة</button>
+                        <button class="btn btn-outline-info rounded-pill" onclick="selectWizardName(this, 'other')">اسم آخر</button>
+                    </div>
+                    <div id="customNameDiv" style="display: none;">
+                        <input type="text" id="wizardBotName" class="form-control bg-dark text-white border-secondary mb-3" placeholder="مربع يكتب فيه الاسم الآخر">
+                    </div>
+                </div>
+
+                <!-- Step 2: Business Type -->
+                <div id="wizardStep2" style="display: none;">
+                    <h6 class="fw-bold mb-3 text-info">الخطوة 2: نوع المشروع</h6>
+                    <label class="form-label">حضرتك بتقدم خدمة ولا منتج ولا شيء آخر؟</label>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button class="btn btn-outline-info rounded-pill" onclick="selectBusinessType(this, 'خدمة')">خدمة</button>
+                        <button class="btn btn-outline-info rounded-pill" onclick="selectBusinessType(this, 'منتج')">منتج</button>
+                        <button class="btn btn-outline-info rounded-pill" onclick="selectBusinessType(this, 'شيء آخر')">شيء آخر</button>
+                    </div>
+                </div>
+
+                <!-- Step 3: Service Details -->
+                <div id="wizardStep3" style="display: none;">
+                    <h6 class="fw-bold mb-3 text-info">الخطوة 3: تفاصيل <span id="btLabel">العمل</span></h6>
+                    <label class="form-label">إيه هي <span id="btLabel2">الخدمة</span> اللي بتقدمها؟</label>
+                    <input type="text" id="wizardServiceName" class="form-control bg-dark text-white border-secondary mb-3" placeholder="اسم الخدمة/المنتج (مثال: تصميم مواقع، حذاء رياضي)">
+                    
+                    <label class="form-label">التفاصيل وسعرها كام؟</label>
+                    <textarea id="wizardServiceDetails" class="form-control bg-dark text-white border-secondary mb-3" rows="3" placeholder="مربع يكتب فيه كل تفاصيل واسعار الخدمة او المنتج وتفاصيل الاستلام..."></textarea>
+                    
+                    <label class="form-label">هل ليها صورة؟ (اختياري)</label>
+                    <input type="file" id="wizardServiceImage" class="form-control bg-dark text-white border-secondary mb-3" accept="image/*">
+                    
+                    <div class="text-start mt-3">
+                        <button class="btn btn-outline-info rounded-pill px-4" onclick="addAnotherItem()">
+                            <i class="bi bi-plus-circle"></i> إضافة <span id="btLabel3">خدمة</span> أخرى
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Step 4: Final Info -->
+                <div id="wizardStep4" style="display: none; text-align: center;">
+                    <div class="mb-3">
+                        <i class="bi bi-check-circle text-success" style="font-size: 3rem;"></i>
+                    </div>
+                    <h5 class="fw-bold">تم حفظ الإعدادات بنجاح!</h5>
+                    <p class="text-white-50 mt-2">
+                        تم إضافة كل التعليمات بالكلمات المفتاحية بدون أي تعارض في قاعدة البيانات. وتقدر في أي وقت تعدل عليها أو تحذفها من صفحة <strong>"إدارة التعليمات"</strong> بكل سهولة عشان تفضل تحدث معلوماتك دايماً.
+                    </p>
+                </div>
+
+            </div>
+            <div class="modal-footer border-top border-light border-opacity-10 justify-content-between" id="wizardFooter">
+                <button type="button" class="btn btn-secondary px-3" onclick="wizardPrevStep()" id="wizardBtnPrev" style="display:none;">رجوع</button>
+                <div class="flex-grow-1 text-end">
+                    <button type="button" class="btn btn-primary px-4" onclick="wizardNextStep()" id="wizardBtnNext">التالي</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const chatContainer = document.getElementById('chatContainer');
+    const chatInput = document.getElementById('chatInput');
+    const btnSend = document.getElementById('btnSend');
+    const btnClearChat = document.getElementById('btnClearChat');
+    const typingIndicator = document.getElementById('typingIndicator');
+    
+    const teachContainer = document.getElementById('teachContainer');
+    const teachInput = document.getElementById('teachInput');
+    const btnTeachSend = document.getElementById('btnTeachSend');
+    const btnClearTeach = document.getElementById('btnClearTeach');
+    const teachTypingIndicator = document.getElementById('teachTypingIndicator');
+    
+    // Auto scroll
+    const scrollToBottom = (container) => {
+        container.scrollTop = container.scrollHeight;
+    };
+    scrollToBottom(chatContainer);
+    scrollToBottom(teachContainer);
+
+    // Auto resize textarea
+    const autoResize = (el) => {
+        el.style.height = 'auto';
+        el.style.height = (el.scrollHeight) + 'px';
+        if (el.value === '') {
+            el.style.height = '48px'; // resetting to base height
+        }
+    };
+
+    chatInput.addEventListener('input', () => autoResize(chatInput));
+    teachInput.addEventListener('input', () => autoResize(teachInput));
+
+    // Render message — supports image injection from gallery
+    const addMessage = (container, text, isUser, type) => {
+        const div = document.createElement('div');
+        if (type === 'teach') {
+            div.className = `msg-bubble ${isUser ? 'msg-user bg-info text-dark' : 'msg-ai bg-dark border border-info border-opacity-50 text-white'}`;
+        } else {
+            div.className = `msg-bubble ${isUser ? 'msg-user' : 'msg-ai'}`;
+        }
+
+        // Extract image references like [صورة: URL] or check for gallery images in botReply
+        let displayText = text;
+        const imgMatches = [...text.matchAll(/\[صورة:\s*(https?:\/\/[^\]]+|\/[^\]]+)\]/g)];
+        const urlMatches = [...text.matchAll(/(?:https?:\/\/\S+|\/\S+)\.(?:jpg|jpeg|png|webp|gif)/gi)];
+        const allImgUrls = [
+            ...imgMatches.map(m => ({ url: m[1].trim(), fromTag: true })),
+            ...urlMatches.map(m => ({ url: m[0].trim(), fromTag: false }))
+        ];
+
+        // Remove raw image tags from text
+        displayText = displayText
+            .replace(/\[صورة:\s*https?:\/\/[^\]]+\]/g, '')
+            .replace(/https?:\/\/\S+\.(?:jpg|jpeg|png|webp|gif)/gi, '')
+            .trim();
+
+        div.innerHTML = displayText.replace(/\n/g, '<br>');
+
+        // Append image grid if images found
+        if (allImgUrls.length > 0) {
+            const grid = document.createElement('div');
+            grid.className = 'msg-img-grid';
+            allImgUrls.forEach(imgObj => {
+                const wrapper = document.createElement('div');
+                const img = document.createElement('img');
+                img.src = imgObj.url;
+                img.loading = 'lazy';
+                img.alt = 'صورة المنتج';
+                img.onclick = () => window.open(imgObj.url, '_blank');
+                wrapper.appendChild(img);
+                grid.appendChild(wrapper);
+            });
+            div.appendChild(grid);
+        }
+
+        container.appendChild(div);
+        scrollToBottom(container);
+    };
+
+    // --- TEST CHAT LOGIC ---
+    const sendMessage = async () => {
+        const text = chatInput.value.trim();
+        if (!text) return;
+
+        chatInput.value = '';
+        autoResize(chatInput);
+        addMessage(chatContainer, text, true, 'test');
+        typingIndicator.style.display = 'block';
+        btnSend.disabled = true;
+        chatInput.disabled = true;
+
+        try {
+            const response = await fetch('/dashboard/training/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: text })
+            });
+
+            const data = await response.json();
+            
+            if (data.success && data.aiReply) {
+                addMessage(chatContainer, data.aiReply.content, false, 'test');
+            } else {
+                addMessage(chatContainer, "حدث خطأ أثناء الاتصال بالذكاء الاصطناعي.", false, 'test');
+            }
+        } catch (err) {
+            console.error(err);
+            addMessage(chatContainer, "فشل الاتصال بالخادم. تأكد من اتصالك بالإنترنت.", false, 'test');
+        } finally {
+            typingIndicator.style.display = 'none';
+            btnSend.disabled = false;
+            chatInput.disabled = false;
+            chatInput.focus();
+        }
+    };
+
+    // --- TEACH CHAT LOGIC ---
+    const sendTeachMessage = async () => {
+        const text = teachInput.value.trim();
+        if (!text) return;
+
+        teachInput.value = '';
+        autoResize(teachInput);
+        addMessage(teachContainer, text, true, 'teach');
+        teachTypingIndicator.style.display = 'block';
+        btnTeachSend.disabled = true;
+        teachInput.disabled = true;
+
+        try {
+            const response = await fetch('/dashboard/training/teach', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: text })
+            });
+
+            const data = await response.json();
+            
+            if (data.success && data.aiReply) {
+                addMessage(teachContainer, data.aiReply.content, false, 'teach');
+            } else {
+                addMessage(teachContainer, "حدث خطأ أثناء معالجة الأمر.", false, 'teach');
+            }
+        } catch (err) {
+            console.error(err);
+            addMessage(teachContainer, "فشل الاتصال بالخادم. تأكد من الفاتورة والإنترنت.", false, 'teach');
+        } finally {
+            teachTypingIndicator.style.display = 'none';
+            btnTeachSend.disabled = false;
+            teachInput.disabled = false;
+            teachInput.focus();
+        }
+    };
+
+    // Events Test
+    btnSend.addEventListener('click', sendMessage);
+    chatInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+
+    btnClearChat.addEventListener('click', async () => {
+        if (!confirm('سيتم مسح محادثة الاختبار، متأكد؟')) return;
+        try {
+            const res = await fetch('/dashboard/training/clear', { method: 'POST' });
+            if (res.ok) window.location.reload();
+        } catch (err) { alert('خطأ في مسح شات الاختبار'); }
+    });
+
+    // Events Teach
+    btnTeachSend.addEventListener('click', sendTeachMessage);
+    teachInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendTeachMessage();
+        }
+    });
+
+    btnClearTeach.addEventListener('click', async () => {
+        if (!confirm('سيتم مسح محادثة التدريب، متأكد؟')) return;
+        try {
+            const res = await fetch('/dashboard/training/clear-teach', { method: 'POST' });
+            if (res.ok) window.location.reload();
+        } catch (err) { alert('خطأ في مسح شات التدريب'); }
+    });
+
+    // ===== Quick Action Buttons =====
+    const btnListInstructions = document.getElementById('btnListInstructions');
+    const btnAnalyzeConflicts = document.getElementById('btnAnalyzeConflicts');
+
+    const sendQuickCommand = async (command, displayText) => {
+        // Show user command in chat
+        addMessage(teachContainer, displayText, true, 'teach');
+        teachTypingIndicator.style.display = 'block';
+        btnTeachSend.disabled = true;
+        teachInput.disabled = true;
+        btnListInstructions.disabled = true;
+        btnAnalyzeConflicts.disabled = true;
+
+        try {
+            const response = await fetch('/dashboard/training/teach', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: command })
+            });
+            const data = await response.json();
+            if (data.success && data.aiReply) {
+                addMessage(teachContainer, data.aiReply.content, false, 'teach');
+            } else {
+                addMessage(teachContainer, 'حدث خطأ أثناء معالجة الأمر.', false, 'teach');
+            }
+        } catch (err) {
+            addMessage(teachContainer, 'فشل الاتصال بالخادم.', false, 'teach');
+        } finally {
+            teachTypingIndicator.style.display = 'none';
+            btnTeachSend.disabled = false;
+            teachInput.disabled = false;
+            btnListInstructions.disabled = false;
+            btnAnalyzeConflicts.disabled = false;
+            teachInput.focus();
+        }
+    };
+
+    if (btnListInstructions) {
+        btnListInstructions.addEventListener('click', () => {
+            sendQuickCommand('اعرضلي كل التعليمات المحفوظة مع الكلمات المفتاحية والـ ID لكل واحدة', '📋 اعرضلي كل التعليمات');
+        });
+    }
+
+    if (btnAnalyzeConflicts) {
+        btnAnalyzeConflicts.addEventListener('click', () => {
+            sendQuickCommand('حلل كل التعليمات وابحث عن التعارضات في الكلمات المفتاحية وقدملي مقترحات لتصليحها', '⚔️ كشف التعارضات وقدم مقترحات');
+        });
+    }
+});
+</script>
+
+<script>
+// ============================================================
+// 🛡️ المقترح 2 و 3 و 4: Keywords Display + Conflict Detection
+// ============================================================
+
+function copyId(id) {
+    navigator.clipboard.writeText(String(id)).then(() => {
+        // Flash the badge briefly
+        const badges = document.querySelectorAll('.badge-id');
+        badges.forEach(b => {
+            if (b.textContent.trim() === '#' + id) {
+                const orig = b.style.background;
+                b.style.background = '#1bc5bd44';
+                b.style.color = '#1bc5bd';
+                setTimeout(() => {
+                    b.style.background = '';
+                    b.style.color = '';
+                }, 800);
+            }
+        });
+    }).catch(() => {
+        // Fallback for older browsers
+        const el = document.createElement('textarea');
+        el.value = String(id);
+        document.body.appendChild(el);
+        el.select();
+        document.execCommand('copy');
+        document.body.removeChild(el);
+    });
+}
+
+// ==== Conflict Detection (Client-side) ====
+document.addEventListener('DOMContentLoaded', () => {
+
+    // 1. Build keyword map: keyword -> [list of row ids]
+    const kwMap = {};
+    const rows = document.querySelectorAll('#instTableBody tr[data-keywords]');
+
+    rows.forEach(row => {
+        const kwStr = row.getAttribute('data-keywords') || '';
+        if (!kwStr) return;
+        const kwList = kwStr.split(',').map(k => k.trim()).filter(k => k.length > 2);
+        kwList.forEach(kw => {
+            if (!kwMap[kw]) kwMap[kw] = [];
+            kwMap[kw].push(row);
+        });
+    });
+
+    // 2. Find conflicting keywords (appear in more than one instruction)
+    const conflictKws = new Set();
+    Object.entries(kwMap).forEach(([kw, rowList]) => {
+        if (rowList.length > 1) {
+            conflictKws.add(kw);
+            rowList.forEach(r => r.classList.add('has-conflict'));
+        }
+    });
+
+    // 3. Color conflicting kw-tags
+    const allKwTags = document.querySelectorAll('.kw-tag[data-kw]');
+    allKwTags.forEach(tag => {
+        const kw = tag.getAttribute('data-kw');
+        if (conflictKws.has(kw)) {
+            tag.classList.add('conflict-kw');
+            tag.title = '⚠️ هذه الكلمة موجودة في تعليمة أخرى - قد تسبب تعارضاً';
+        }
+    });
+
+    // 4. Show conflict count badge
+    const conflictRows = document.querySelectorAll('#instTableBody tr.has-conflict');
+    const badge = document.getElementById('conflictCountBadge');
+    if (badge && conflictRows.length > 0) {
+        badge.textContent = `⚠️ ${conflictRows.length} تعليمات بها تعارض`;
+        badge.style.display = 'inline-block';
+    }
+
+    // 5. Search filter
+    const searchInput = document.getElementById('instSearch');
+    if (searchInput) {
+        searchInput.addEventListener('input', () => {
+            const query = searchInput.value.toLowerCase().trim();
+            rows.forEach(row => {
+                const name = row.getAttribute('data-name') || '';
+                const kws = row.getAttribute('data-keywords') || '';
+                if (!query || name.includes(query) || kws.includes(query)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        });
+    }
+
+    // 6. After teach message is saved successfully, reload the instructions table
+    // We hook into the sendTeachMessage response
+    const origTeachSend = window.__origTeachSend;
+    
+    // Listen for custom event from teach chat that fires after save
+    document.addEventListener('instruction_saved', () => {
+        // Reload page to refresh instructions table
+        setTimeout(() => window.location.reload(), 1500);
+    });
+});
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+let currentWizardStep = 1;
+let wizardData = { botName: 'لينا', businessType: '', items: [] };
+
+window.selectWizardName = function(btn, val) {
+    const parent = btn.parentElement;
+    parent.querySelectorAll('.btn').forEach(b => { b.classList.remove('active', 'btn-info'); b.classList.add('btn-outline-info'); });
+    btn.classList.add('active', 'btn-info');
+    btn.classList.remove('btn-outline-info');
+    
+    if (val === 'other') {
+        document.getElementById('customNameDiv').style.display = 'block';
+        wizardData.botName = ''; 
+    } else {
+        document.getElementById('customNameDiv').style.display = 'none';
+        wizardData.botName = val;
+    }
+};
+
+window.selectBusinessType = function(btn, val) {
+    const parent = btn.parentElement;
+    parent.querySelectorAll('.btn').forEach(b => { b.classList.remove('active', 'btn-info'); b.classList.add('btn-outline-info'); });
+    btn.classList.add('active', 'btn-info');
+    btn.classList.remove('btn-outline-info');
+    
+    wizardData.businessType = val;
+    document.getElementById('btLabel').textContent = val;
+    document.getElementById('btLabel2').textContent = val === 'خدمة' ? 'الخدمة' : (val === 'منتج' ? 'المنتج' : 'الشيء');
+    document.getElementById('btLabel3').textContent = val === 'خدمة' ? 'خدمة' : (val === 'منتج' ? 'منتج' : 'تخصص');
+    
+    wizardNextStep();
+};
+
+window.addAnotherItem = function() {
+    const name = document.getElementById('wizardServiceName').value.trim();
+    const details = document.getElementById('wizardServiceDetails').value.trim();
+    const fileInput = document.getElementById('wizardServiceImage');
+    
+    if (!name || !details) {
+        alert('أكمل تفاصيل ' + (wizardData.businessType === 'خدمة' ? 'الخدمة' : 'المنتج') + ' الحالية أولاً!');
+        return;
+    }
+    
+    wizardData.items.push({
+        name,
+        details,
+        file: fileInput.files.length > 0 ? fileInput.files[0] : null,
+        type: wizardData.businessType
+    });
+    
+    document.getElementById('wizardServiceName').value = '';
+    document.getElementById('wizardServiceDetails').value = '';
+    fileInput.value = '';
+    
+    alert(`تم إضافة ${name} للقائمة. يمكنك الآن إضافة المزيد.`);
+    document.getElementById('wizardServiceName').focus();
+};
+
+window.wizardNextStep = async function() {
+    if (currentWizardStep === 1) {
+        if (document.getElementById('customNameDiv').style.display === 'block') {
+            const val = document.getElementById('wizardBotName').value.trim();
+            if (!val) { alert("أدخل اسم البوت أولاً!"); return; }
+            wizardData.botName = val;
+        }
+    } else if (currentWizardStep === 2) {
+        if (!wizardData.businessType) { alert("اختار النوع أولاً!"); return; }
+    } else if (currentWizardStep === 3) {
+        const name = document.getElementById('wizardServiceName').value.trim();
+        const details = document.getElementById('wizardServiceDetails').value.trim();
+        const fileInput = document.getElementById('wizardServiceImage');
+        
+        if (name && details) {
+            wizardData.items.push({
+                name,
+                details,
+                file: fileInput.files.length > 0 ? fileInput.files[0] : null,
+                type: wizardData.businessType
+            });
+        }
+        
+        if (wizardData.items.length === 0) {
+            alert('يرجى إضافة خدمة أو منتج واحد على الأقل.');
+            return;
+        }
+        
+        document.getElementById('wizardBtnNext').disabled = true;
+        document.getElementById('wizardBtnNext').innerHTML = '<span class="spinner-border spinner-border-sm"></span> جاري الحفظ...';
+        await submitWizard();
+        return;
+    }
+
+    document.getElementById(`wizardStep${currentWizardStep}`).style.display = 'none';
+    currentWizardStep++;
+    document.getElementById(`wizardStep${currentWizardStep}`).style.display = 'block';
+    updateWizardFooter();
+};
+
+window.wizardPrevStep = function() {
+    document.getElementById(`wizardStep${currentWizardStep}`).style.display = 'none';
+    currentWizardStep--;
+    document.getElementById(`wizardStep${currentWizardStep}`).style.display = 'block';
+    updateWizardFooter();
+};
+
+function updateWizardFooter() {
+    const btnNext = document.getElementById('wizardBtnNext');
+    const btnPrev = document.getElementById('wizardBtnPrev');
+    
+    if (currentWizardStep === 1) {
+        btnPrev.style.display = 'none';
+        btnNext.textContent = 'التالي';
+    } else if (currentWizardStep === 2) {
+        btnPrev.style.display = 'inline-block';
+        btnNext.textContent = 'التالي';
+    } else if (currentWizardStep === 3) {
+        btnPrev.style.display = 'inline-block';
+        btnNext.textContent = 'حفظ وإضافة التعليمات';
+    } else if (currentWizardStep === 4) {
+        document.getElementById('wizardFooter').style.display = 'none';
+    }
+}
+
+async function submitWizard() {
+    try {
+        // Upload images first
+        for (let i = 0; i < wizardData.items.length; i++) {
+            let item = wizardData.items[i];
+            item.image = '';
+            if (item.file) {
+                const formData = new FormData();
+                formData.append('image', item.file);
+                const uploadRes = await fetch('/dashboard/instructions/upload-image', { method: 'POST', body: formData });
+                if (uploadRes.ok) {
+                    const uploadData = await uploadRes.json();
+                    item.image = uploadData.imageUrl;
+                }
+            }
+            // Remove file reference to avoid sending it in JSON
+            delete item.file;
+        }
+
+        const setupRes = await fetch('/dashboard/training/setup-wizard', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                botName: wizardData.botName,
+                items: wizardData.items
+            })
+        });
+
+        if (setupRes.ok) {
+            document.getElementById('wizardStep3').style.display = 'none';
+            currentWizardStep = 4;
+            document.getElementById('wizardStep4').style.display = 'block';
+            updateWizardFooter();
+        } else {
+            alert("حدث خطأ أثناء الحفظ.");
+        }
+    } catch(err) { 
+        alert("فشل الاتصال بالخادم."); 
+    }
+    
+    document.getElementById('wizardBtnNext').disabled = false;
+    document.getElementById('wizardBtnNext').textContent = 'حفظ وإضافة التعليمات';
+}
+
+document.getElementById('wizardModal')?.addEventListener('hidden.bs.modal', function() {
+    if (currentWizardStep === 4) window.location.reload();
+});
+</script>
+
+</body>
+</html>

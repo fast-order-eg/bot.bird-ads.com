@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+
+# Environment Variables
+.env
+.env.*
+!.env.example
+
+# WhatsApp & Auth Sessions
+sessions/
+auth_info_baileys/
+
+# Database & Backups
+database.sqlite
+*.sqlite
+*.sql
+*.zip
+*.tar.gz
+*.bak
+*.backup*
+
+# Uploads & Media
+public/uploads/*
+!public/uploads/.gitkeep
+
+# Logs & Temp
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+Thumbs.db
+scratch/
+*.patch
+
+# Sensitive JSON keys
+project-*.json

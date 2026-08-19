@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إدارة الماسنجر والانستجرام - <%= (user.settings && user.settings.bot_name) ? user.settings.bot_name : 'AI Whatsapp' %></title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="/style.css" rel="stylesheet">
+    <style>
+        .page-card {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px;
+            transition: all 0.3s;
+        }
+        .page-card:hover { background: rgba(255,255,255,0.08); }
+        .convo-card {
+            background: rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,255,255,0.07);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .convo-card:hover { background: rgba(255,255,255,0.05); transform: translateX(-3px); }
+        .messenger-badge { background: linear-gradient(135deg, #0866ff, #a855f7); }
+        .setup-step { background: rgba(8,102,255,0.1); border: 1px solid rgba(8,102,255,0.25); border-radius: 12px; }
+        #toast-container { position: fixed; bottom: 20px; left: 20px; z-index: 9999; }
+        .copy-btn { cursor: pointer; font-size: 0.75rem; }
+        .copy-btn:hover { color: #0dcaf0; }
+    </style>
+</head>
+<body>
+    <%- include('partials/navbar') %>
+    <%- include('partials/sidebar') %>
+
+    <div class="main-content">
+
+        <!-- Header -->
+        <div class="glass-card p-4 mb-4 animate-fade-in">
+            <div class="d-flex align-items-center gap-3 mb-2">
+                <div class="p-2 rounded-3 messenger-badge">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="white" viewBox="0 0 24 24">
+                        <path d="M12 0C5.4 0 0 4.98 0 11.1c0 3.498 1.744 6.615 4.477 8.653V24l4.086-2.242c1.09.301 2.246.463 3.437.463 6.6 0 12-4.98 12-11.1C24 4.98 18.6 0 12 0zm1.191 14.963L10.1 11.71l-6.044 3.29 6.647-7.055L13.9 11.2l3.106-3.256-6.815 7.02z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h4 class="fw-bold mb-0 text-white">إدارة الماسنجر والانستجرام 💬</h4>
+                    <p class="text-secondary small mb-0">اربط صفحات الفيسبوك وردّ على العملاء بالذكاء الاصطناعي</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4">
+
+            <!-- Center Column: Connect + Pages -->
+            <div class="col-12 col-lg-8 mx-auto">
+
+                <!-- Connect via Facebook Card -->
+                <div class="glass-card p-4 mb-4">
+                    <h6 class="fw-bold text-white mb-1">🔗 ربط صفحات الفيس والانستجرام</h6>
+                    <p class="text-white-50 small mb-3">اضغط الزرار وسجّل بحساب الفيسبوك بتاعك عشان نجيب صفحاتك تلقائياً</p>
+                    <a href="/auth/facebook/messenger" class="btn w-100 rounded-pill fw-bold d-flex align-items-center justify-content-center gap-2" 
+                       style="background: linear-gradient(135deg, #0866ff, #1877f2); color: white; padding: 12px; font-size: 1rem;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="white" viewBox="0 0 24 24">
+                            <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                        </svg>
+                        سجّل دخول بالفيسبوك
+                    </a>
+
+
+                </div>
+
+                <!-- Pages List -->
+                <div class="glass-card p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="fw-bold text-white mb-0">📑 الصفحات المربوطة</h6>
+                        <button class="btn btn-sm btn-outline-danger" onclick="disconnectAllPages()">إلغاء ربط الكل</button>
+                    </div>
+                    <div id="pages-list">
+                        <div class="text-center text-white-50 py-3">
+                            <div class="spinner-border spinner-border-sm mb-2"></div>
+                            <p class="small mb-0">جاري التحميل...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+        </div>
+    </div>
+
+    <!-- Summary Modal -->
+    <div class="modal fade" id="summaryModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content glass-card border-secondary">
+                <div class="modal-header border-secondary border-opacity-25">
+                    <h5 class="modal-title text-white">📋 ملخص المحادثة</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="summary-content" class="text-white-50">جاري التحميل...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Comment Modal -->
+    <div class="modal fade" id="editCommentModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content glass-card border-secondary">
+                <div class="modal-header border-secondary border-opacity-25">
+                    <h5 class="modal-title text-white">✏️ تعديل الرد التلقائي</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-white-50 small mb-2">هذا هو الرد الذي سيتم إرساله كتعليق للعملاء. يمكنك استخدام <code>{name}</code> لذكر اسم العميل.</p>
+                    <textarea id="edit-comment-text" class="form-control bg-dark text-white border-secondary" rows="4"></textarea>
+                    <input type="hidden" id="edit-comment-pageId">
+                </div>
+                <div class="modal-footer border-secondary border-opacity-25">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="button" class="btn btn-primary" onclick="savePageComment()">حفظ التعديلات</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
+    <!-- Fixed Reply Modal -->
+    <div class="modal fade" id="fixedReplyModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content glass-card border-secondary">
+                <div class="modal-header border-secondary border-opacity-25">
+                    <h5 class="modal-title text-white">📌 الرد الثابت</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-warning small mb-2">⚠️ عند تفعيل هذا الوضع، البوت سيرد بهذه الرسالة مرة واحدة فقط لكل عميل جديد، والذكاء الاصطناعي سيتوقف.</p>
+                    <textarea id="fixed-reply-text" class="form-control bg-dark text-white border-secondary" rows="5" placeholder="مثال: أهلاً {name}! شكراً لتواصلك معنا، سيقوم فريقنا بالرد عليك خلال دقائق ✅"></textarea>
+                    
+                    <!-- إرفاق صور الرد الثابت -->
+                    <div class="mt-3">
+                        <label class="text-white small mb-1 d-block">🖼️ الصور المرفقة مع الرد الثابت:</label>
+                        <input type="file" id="fixed-reply-image-input" accept="image/*" multiple style="display:none;" onchange="uploadFixedReplyImages(this)">
+                        <button type="button" class="btn btn-sm btn-outline-info d-flex align-items-center gap-2" onclick="document.getElementById('fixed-reply-image-input').click()">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M6.002 5.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z"/><path d="M2.002 1a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V3a2 2 0 0 0-2-2h-12zm12 1a1 1 0 0 1 1 1v6.5l-3.777-1.947a.5.5 0 0 0-.577.093l-3.71 3.71-2.66-1.772a.5.5 0 0 0-.63.062L1.002 12V3a1 1 0 0 1 1-1h12z"/></svg>
+                            إرفاق صورة أو أكثر
+                        </button>
+                        <div id="fixed-reply-images-preview" class="d-flex flex-wrap gap-2 mt-2"></div>
+                    </div>
+                    
+                    <div class="form-check form-switch mt-3 mb-1">
+                        <input class="form-check-input" type="checkbox" id="fixed-reply-buttons" style="cursor: pointer;">
+                        <label class="form-check-label text-white small" for="fixed-reply-buttons" style="cursor: pointer;">
+                            إرسال الأزرار التفاعلية مع الرد الثابت
+                        </label>
+                    </div>
+                    
+                    <div class="form-check form-switch mt-2 mb-1">
+                        <input class="form-check-input" type="checkbox" id="fixed-reply-messages" style="cursor: pointer;">
+                        <label class="form-check-label text-white small" for="fixed-reply-messages" style="cursor: pointer;">
+                            تفعيل الرد على رسائل الفيسبوك بالرد الثابت
+                        </label>
+                    </div>
+                    
+                    <div class="form-check form-switch mt-2 mb-1">
+                        <input class="form-check-input" type="checkbox" id="fixed-reply-ig-messages" style="cursor: pointer;">
+                        <label class="form-check-label text-white small" for="fixed-reply-ig-messages" style="cursor: pointer;">
+                            تفعيل الرد على رسائل الإنستجرام بالرد الثابت
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer border-secondary border-opacity-25">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="button" class="btn btn-warning text-dark fw-bold" onclick="saveFixedReply()">📌 تفعيل الرد الثابت</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function showToast(msg, type = 'success') {
+            const toast = document.createElement('div');
+            toast.className = `alert alert-${type} shadow mb-2`;
+            toast.innerText = msg;
+            document.getElementById('toast-container').appendChild(toast);
+            setTimeout(() => toast.remove(), 4000);
+        }
+
+        // ======= معالجة نتيجة Facebook OAuth =======
+        (function checkOAuthResult() {
+            const params = new URLSearchParams(window.location.search);
+            const success = params.get('success');
+            const error = params.get('error');
+
+            if (success) {
+                showToast(`✅ تم ربط ${success} صفحة بنجاح من الفيسبوك!`, 'success');
+            } else if (error) {
+                const msgs = {
+                    'facebook_denied': '❌ تم رفض الصلاحيات، يرجى المحاولة مرة أخرى',
+                    'token_failed': '❌ فشل في الحصول على الـ Token من فيسبوك',
+                    'no_pages': '⚠️ لا توجد صفحات مرتبطة بهذا الحساب',
+                    'server_error': '❌ حدث خطأ في الخادم، يرجى المحاولة لاحقاً'
+                };
+                showToast(msgs[error] || '❌ حدث خطأ غير متوقع', 'danger');
+            }
+
+            // امسح الـ params من الـ URL عشان ما يتكررش لو refresh
+            if (success || error) {
+                history.replaceState({}, '', '/dashboard/messenger');
+            }
+        })();
+
+        function copyText(text, btn) {
+            navigator.clipboard.writeText(text).then(() => {
+                const orig = btn.innerText;
+                btn.innerText = '✓';
+                btn.classList.add('btn-success');
+                setTimeout(() => { btn.innerText = orig; btn.classList.remove('btn-success'); }, 1500);
+            });
+        }
+
+        // ======= Load Pages =======
+        async function loadPages() {
+            const res = await fetch('/api/messenger/pages');
+            const data = await res.json();
+            const list = document.getElementById('pages-list');
+            const filter = document.getElementById('page-filter');
+
+            if (!data.pages || data.pages.length === 0) {
+                list.innerHTML = '<p class="text-white-50 text-center small py-2">لا توجد صفحات مربوطة بعد</p>';
+                return;
+            }
+
+            list.innerHTML = data.pages.map(page => {
+                const commentText = page.defaultComment || 'أهلاً وسهلاً بحضرتك 😊\nتم إرسال التفاصيل لك في الرسائل الخاصة ✅';
+                const safeComment = encodeURIComponent(commentText);
+                const isFixed = page.replyMode === 'fixed';
+                const fixedReplyText = page.fixedReply || '';
+                const safeFixed = encodeURIComponent(fixedReplyText);
+                const useButtons = Boolean(page.useButtonsWithFixedReply === true || page.useButtonsWithFixedReply === 1 || page.useButtonsWithFixedReply === '1');
+                const replyToMessages = Boolean(page.replyToMessagesWithFixed === true || page.replyToMessagesWithFixed === 1 || page.replyToMessagesWithFixed === '1');
+                const replyToIgMessages = Boolean(page.replyToIgMessagesWithFixed === true || page.replyToIgMessagesWithFixed === 1 || page.replyToIgMessagesWithFixed === '1');
+                const fixedReplyImagesStr = page.fixedReplyImages || '[]';
+                const safeImages = encodeURIComponent(fixedReplyImagesStr);
+                const useButtonsTag = useButtons ? `<span class="badge bg-primary ms-2" style="font-size: 0.65rem;">🔘 أزرار تفاعلية</span>` : '';
+                
+                let imagesHtml = '';
+                if (page.fixedReplyImages) {
+                    try {
+                        const imgs = JSON.parse(page.fixedReplyImages);
+                        if (imgs && imgs.length > 0) {
+                            imagesHtml = `<div class="d-flex flex-wrap gap-1 mt-2">` + 
+                                imgs.map(img => `<img src="${img}" style="width: 45px; height: 45px; object-fit: cover; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2);">`).join('') + 
+                            `</div>`;
+                        }
+                    } catch(e){}
+                }
+
+                return `
+                <div class="page-card p-3 mb-3 d-flex flex-column gap-2">
+                    <div class="d-flex align-items-start justify-content-between">
+                        <div>
+                            <div class="fw-bold text-white d-flex align-items-center gap-2">
+                                ${page.pageName}
+                                <a href="https://facebook.com/${page.pageId}" target="_blank" class="text-white-50" title="فتح صفحة الفيسبوك">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5z"/><path fill-rule="evenodd" d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0v-5z"/></svg>
+                                </a>
+                            </div>
+                            <div class="d-flex flex-column gap-1 mt-1">
+                                <div><span class="badge bg-primary" style="font-size: 0.65rem;">FB ID:</span> <code class="text-white-50 small" dir="ltr">${page.pageId}</code></div>
+                                ${page.instagramUsername ? `<div>
+                                    <span class="badge" style="font-size: 0.65rem; background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);">Instagram:</span> 
+                                    <a href="https://instagram.com/${page.instagramUsername}" target="_blank" class="text-white-50 small text-decoration-none" dir="ltr">@${page.instagramUsername}
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5z"/><path fill-rule="evenodd" d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0v-5z"/></svg>
+                                    </a>
+                                </div>` : (page.instagramId ? `<div><span class="badge bg-secondary" style="font-size: 0.65rem;">IG Linked</span></div>` : '')}
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge ${page.isActive ? 'bg-success' : 'bg-secondary'}">${page.isActive ? 'نشطة' : 'غير نشطة'}</span>
+                            <button class="btn btn-sm btn-outline-danger rounded-pill" onclick="disconnectPage('${page.pageId}')">حذف</button>
+                        </div>
+                    </div>
+
+                    <!-- نظام الرد -->
+                    <div class="p-2 rounded" style="background: rgba(8,102,255,0.1); border: 1px solid rgba(8,102,255,0.3);">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="text-white small fw-bold">🤖 نظام الرد</span>
+                            <div class="d-flex gap-1">
+                                <button onclick="setReplyMode('${page.pageId}', 'ai', '${safeFixed}', ${useButtons}, ${replyToMessages}, ${replyToIgMessages}, '${safeImages}')"
+                                    class="btn btn-xs px-2 py-1 ${!isFixed ? 'btn-primary' : 'btn-outline-secondary'}"
+                                    style="font-size:0.75rem;border-radius:8px;">
+                                    🤖 ذكاء اصطناعي
+                                </button>
+                                <button onclick="setReplyMode('${page.pageId}', 'fixed', '${safeFixed}', ${useButtons}, ${replyToMessages}, ${replyToIgMessages}, '${safeImages}')"
+                                    class="btn btn-xs px-2 py-1 ${isFixed ? 'btn-warning text-dark' : 'btn-outline-secondary'}"
+                                    style="font-size:0.75rem;border-radius:8px;">
+                                    📌 رد ثابت
+                                </button>
+                            </div>
+                        </div>
+                        ${ isFixed ? `
+                        <div class="mt-1 p-2 rounded" style="background:rgba(255,193,7,0.1);border:1px dashed rgba(255,193,7,0.4);">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="text-warning small d-flex align-items-center">📌 الرد الثابت الحالي: ${useButtonsTag}</span>
+                                <button class="btn btn-sm btn-link text-info p-0" onclick="openFixedReplyModal('${page.pageId}', '${safeFixed}', ${useButtons}, ${replyToMessages}, ${replyToIgMessages}, '${safeImages}')">تعديل ✏️</button>
+                            </div>
+                            <div class="text-white-50 small" style="white-space:pre-wrap;">${fixedReplyText || 'لم يتم تحديد رد ثابت بعد'}</div>
+                            ${imagesHtml}
+                        </div>` : `<div class="text-white-50 small">ℹ️ البوت يرد تلقائياً بالذكاء الاصطناعي</div>` }
+                    </div>
+
+                    <!-- رد الكومنتات -->
+                    <div class="p-2 rounded" style="background: rgba(0,0,0,0.3); border: 1px dashed rgba(255,255,255,0.1);">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span class="text-white-50 small">💬 رد الكومنتات:</span>
+                            <button class="btn btn-sm btn-link text-info p-0 text-decoration-none" onclick="openEditComment('${page.pageId}', '${safeComment}')">تعديل ✏️</button>
+                        </div>
+                        <div class="text-white small" style="white-space: pre-wrap;">${commentText.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>
+                    </div>
+                </div>
+                `;
+            }).join('');
+        }
+
+
+
+
+        // ======= Disconnect Page =======
+        async function disconnectPage(pageId) {
+            if (!confirm('هل أنت متأكد من إلغاء ربط هذه الصفحة؟')) return;
+            const res = await fetch(`/api/messenger/page/${pageId}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (data.success) { showToast('تم إلغاء ربط الصفحة'); loadPages(); }
+        }
+
+        // ======= Disconnect All Pages =======
+        async function disconnectAllPages() {
+            if (!confirm('هل أنت متأكد من إلغاء ربط كل الصفحات؟ لن يتم الرد على أي تعليقات أو رسائل بعدها.')) return;
+            const res = await fetch(`/api/messenger/pages`, { method: 'DELETE' });
+            const data = await res.json();
+            if (data.success) { showToast('تم إلغاء ربط كل الصفحات'); loadPages(); }
+        }
+
+        // ======= Edit Comment =======
+        const editCommentModal = new bootstrap.Modal(document.getElementById('editCommentModal'));
+        function openEditComment(pageId, safeComment) {
+            document.getElementById('edit-comment-pageId').value = pageId;
+            document.getElementById('edit-comment-text').value = decodeURIComponent(safeComment);
+            editCommentModal.show();
+        }
+
+        async function savePageComment() {
+            const pageId = document.getElementById('edit-comment-pageId').value;
+            const defaultComment = document.getElementById('edit-comment-text').value.trim();
+            if (!defaultComment) return showToast('لا يمكن ترك الرد فارغاً', 'danger');
+
+            const res = await fetch(`/api/messenger/page/${pageId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ defaultComment })
+            });
+            const data = await res.json();
+            if (data.success) {
+                showToast('تم تحديث الرد التلقائي');
+                editCommentModal.hide();
+                loadPages();
+            } else {
+                showToast('حدث خطأ أثناء التحديث', 'danger');
+            }
+        }
+
+
+
+        // ======= Show AI Summary =======
+        const summaryModal = new bootstrap.Modal(document.getElementById('summaryModal'));
+        async function showSummary(conversationId, name) {
+            document.getElementById('summary-content').innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm mb-2"></div><p>جاري توليد الملخص بالذكاء الاصطناعي...</p></div>';
+            summaryModal.show();
+            const res = await fetch(`/api/messenger/summary/${conversationId}`);
+            const data = await res.json();
+            document.getElementById('summary-content').innerHTML = data.summary
+                ? `<div class="bg-dark rounded-3 p-3">${data.summary.replace(/\n/g, '<br>')}</div>`
+                : '<div class="text-danger">لا يوجد محادثات كافية لعمل ملخص</div>';
+        }
+
+        // Init
+        loadPages();
+
+        // ====== Fixed Reply Modal ======
+        let currentFixedPageId = null;
+        let uploadedFixedReplyImages = [];
+        const fixedReplyModal = new bootstrap.Modal(document.getElementById('fixedReplyModal'));
+        
+        function openFixedReplyModal(pageId, safeFixed, useButtons, replyToMessages, replyToIgMessages, safeImages = '[]') {
+            currentFixedPageId = pageId;
+            document.getElementById('fixed-reply-text').value = decodeURIComponent(safeFixed);
+            document.getElementById('fixed-reply-buttons').checked = (useButtons === true || useButtons === 'true' || useButtons === 1);
+            document.getElementById('fixed-reply-messages').checked = (replyToMessages === true || replyToMessages === 'true' || replyToMessages === 1);
+            document.getElementById('fixed-reply-ig-messages').checked = (replyToIgMessages === true || replyToIgMessages === 'true' || replyToIgMessages === 1);
+            
+            try {
+                uploadedFixedReplyImages = JSON.parse(decodeURIComponent(safeImages)) || [];
+            } catch(e) {
+                uploadedFixedReplyImages = [];
+            }
+            
+            renderFixedReplyImagesPreview();
+            fixedReplyModal.show();
+        }
+
+        function renderFixedReplyImagesPreview() {
+            const container = document.getElementById('fixed-reply-images-preview');
+            container.innerHTML = uploadedFixedReplyImages.map((img, idx) => `
+                <div class="position-relative" style="width: 70px; height: 70px;">
+                    <img src="${img}" class="w-100 h-100 rounded shadow-sm" style="object-fit: cover; border: 1px solid rgba(255,255,255,0.2);">
+                    <button type="button" class="btn btn-danger p-0 rounded-circle position-absolute d-flex align-items-center justify-content-center" 
+                            style="top: -5px; right: -5px; width: 20px; height: 20px; font-size: 12px; font-weight: bold;" 
+                            onclick="removeFixedReplyImage(${idx})">×</button>
+                </div>
+            `).join('');
+        }
+
+        function removeFixedReplyImage(idx) {
+            uploadedFixedReplyImages.splice(idx, 1);
+            renderFixedReplyImagesPreview();
+        }
+
+        async function uploadFixedReplyImages(input) {
+            if (!input.files || input.files.length === 0) return;
+            
+            const container = document.getElementById('fixed-reply-images-preview');
+            const loader = document.createElement('div');
+            loader.className = 'spinner-border spinner-border-sm text-info align-self-center mx-2';
+            container.appendChild(loader);
+
+            for (let i = 0; i < input.files.length; i++) {
+                const file = input.files[i];
+                const formData = new FormData();
+                formData.append('image', file);
+
+                try {
+                    const res = await fetch('/dashboard/instructions/upload-image', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    const data = await res.json();
+                    if (data.imageUrl) {
+                        uploadedFixedReplyImages.push(data.imageUrl);
+                    } else {
+                        showToast('فشل رفع إحدى الصور', 'danger');
+                    }
+                } catch(e) {
+                    showToast('خطأ في الخادم أثناء رفع الصور', 'danger');
+                }
+            }
+            loader.remove();
+            renderFixedReplyImagesPreview();
+            input.value = '';
+        }
+
+        async function saveFixedReply() {
+            const fixedReply = document.getElementById('fixed-reply-text').value.trim();
+            const useButtonsWithFixedReply = document.getElementById('fixed-reply-buttons').checked;
+            const replyToMessagesWithFixed = document.getElementById('fixed-reply-messages').checked;
+            const replyToIgMessagesWithFixed = document.getElementById('fixed-reply-ig-messages').checked;
+            if (!fixedReply) return showToast('يجب كتابة الرد الثابت', 'danger');
+            
+            const res = await fetch(`/api/messenger/page/${currentFixedPageId}/settings`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    replyMode: 'fixed', 
+                    fixedReply, 
+                    useButtonsWithFixedReply, 
+                    replyToMessagesWithFixed, 
+                    replyToIgMessagesWithFixed,
+                    fixedReplyImages: uploadedFixedReplyImages
+                })
+            });
+            const data = await res.json();
+            if (data.success) { showToast(data.message); fixedReplyModal.hide(); loadPages(); }
+            else showToast(data.message, 'danger');
+        }
+
+        async function setReplyMode(pageId, mode, safeFixed, useButtons, replyToMessages, replyToIgMessages, safeImages = '[]') {
+            if (mode === 'fixed') {
+                // افتح المودال عشان يدخل الرد الثابت
+                openFixedReplyModal(pageId, safeFixed, useButtons, replyToMessages, replyToIgMessages, safeImages);
+                return;
+            }
+            // Mode = ai: حوّل مباشرة
+            const res = await fetch(`/api/messenger/page/${pageId}/settings`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    replyMode: 'ai', 
+                    fixedReply: decodeURIComponent(safeFixed), 
+                    useButtonsWithFixedReply: useButtons === true || useButtons === 'true', 
+                    replyToMessagesWithFixed: replyToMessages !== false && replyToMessages !== 'false', 
+                    replyToIgMessagesWithFixed: replyToIgMessages !== false && replyToIgMessages !== 'false',
+                    fixedReplyImages: JSON.parse(decodeURIComponent(safeImages))
+                })
+            });
+            const data = await res.json();
+            if (data.success) { showToast(data.message); loadPages(); }
+            else showToast(data.message, 'danger');
+        }
+    </script>
+</body>
+</html>

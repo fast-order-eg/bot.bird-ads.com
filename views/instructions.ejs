@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إدارة التعليمات</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="/style.css?v=<%= Date.now() %>" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+
+<style>
+    /* ===== Keywords / Conflict Panel ===== */
+    .kw-panel {
+        background: #1e1e2d;
+        border-radius: 12px;
+        border: 1px solid #323248;
+        margin-top: 28px;
+        overflow: hidden;
+    }
+    .kw-panel-header {
+        background: #2b2b40;
+        padding: 14px 20px;
+        border-bottom: 1px solid #323248;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .kw-table-wrap {
+        overflow-x: auto;
+        max-height: 340px;
+        overflow-y: auto;
+    }
+    .kw-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        min-width: 500px;
+    }
+    .kw-table th {
+        background: #212135;
+        color: #8899ac;
+        padding: 10px 14px;
+        text-align: right;
+        font-weight: 600;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        border-bottom: 1px solid #323248;
+        white-space: nowrap;
+    }
+    .kw-table td {
+        padding: 9px 14px;
+        border-bottom: 1px solid #1e1e2d;
+        color: #e4e6ef;
+        vertical-align: top;
+    }
+    .kw-table tr:hover td {
+        background: rgba(54, 153, 255, 0.05);
+    }
+    .kw-table tr.has-conflict td {
+        background: rgba(255, 100, 100, 0.06);
+    }
+    .kw-table tr.has-conflict:hover td {
+        background: rgba(255, 100, 100, 0.12);
+    }
+    .badge-id {
+        background: #3699ff22;
+        color: #3699ff;
+        border: 1px solid #3699ff44;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-weight: bold;
+        font-family: monospace;
+        font-size: 12px;
+    }
+    .badge-kw-global {
+        background: #1bc5bd22;
+        color: #1bc5bd;
+        border: 1px solid #1bc5bd44;
+        padding: 2px 7px;
+        border-radius: 4px;
+        font-size: 11px;
+    }
+    .badge-kw-topic {
+        background: #8950fc22;
+        color: #8950fc;
+        border: 1px solid #8950fc44;
+        padding: 2px 7px;
+        border-radius: 4px;
+        font-size: 11px;
+    }
+    .badge-conflict {
+        background: #ff646422;
+        color: #ff6464;
+        border: 1px solid #ff646444;
+        padding: 2px 7px;
+        border-radius: 4px;
+        font-size: 11px;
+    }
+    .kw-tag {
+        display: inline-block;
+        background: #2b2b40;
+        color: #a0a0c0;
+        border: 1px solid #323248;
+        padding: 1px 6px;
+        border-radius: 4px;
+        font-size: 11px;
+        margin: 2px 2px 2px 0;
+    }
+    .kw-tag.conflict-kw {
+        background: #ff646422;
+        color: #ff9494;
+        border-color: #ff646444;
+        cursor: help;
+    }
+    .copy-id-btn {
+        background: none;
+        border: none;
+        color: #3699ff;
+        cursor: pointer;
+        padding: 0 4px;
+        font-size: 13px;
+        opacity: 0.6;
+        transition: 0.2s;
+    }
+    .copy-id-btn:hover { opacity: 1; }
+    .kw-search {
+        background: #2b2b40;
+        border: 1px solid #323248;
+        color: white;
+        padding: 6px 12px;
+        border-radius: 6px;
+        outline: none;
+        font-size: 13px;
+        width: 200px;
+        max-width: 100%;
+    }
+    .kw-search:focus { border-color: #3699ff; }
+    @media (max-width: 576px) {
+        .kw-panel-header { flex-direction: column; align-items: flex-start; }
+        .kw-search { width: 100%; }
+    }
+</style>
+</head>
+
+<body>
+    <%- include('partials/navbar') %>
+        <%- include('partials/sidebar') %>
+
+            <% if (typeof success !=='undefined' && success) { %>
+                <div class="alert alert-success success-msg shadow-lg rounded-pill px-5" role="alert">
+                    <i class="bi bi-check-circle-fill me-2"></i> تم حفظ التعليمات بنجاح!
+                </div>
+                <script>
+                    setTimeout(() => {
+                        window.location.href = '/dashboard/instructions';
+                    }, 1500);
+                </script>
+                <% } %>
+
+                    <div class="container-fluid main-content px-4 px-lg-5">
+                        <div class="glass-card p-4 p-md-5 animate-fade-in">
+                            <div
+                                class="d-flex flex-column flex-md-row justify-content-between align-items-center mb-4 gap-3">
+                                <h2 class="m-0 fw-bold d-flex align-items-center gap-2 text-white">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"
+                                        fill="var(--primary-color)" viewBox="0 0 16 16">
+                                        <path fill-rule="evenodd"
+                                            d="M5 11.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5z" />
+                                        <path
+                                            d="M2.242 2.194a.27.27 0 0 1 .516 0l.162.53c.035.115.14.194.258.194h.551c.259 0 .37.333.164.493l-.468.363a.277.277 0 0 0-.094.3l.173.569c.078.256-.213.462-.423.3l-.417-.324a.267.267 0 0 0-.328 0l-.417.323c-.21.163-.5-.043-.423-.299l.173-.57a.277.277 0 0 0-.094-.299l-.468-.363c-.206-.16-.095-.493.164-.493h.551a.267.267 0 0 1 .258-.194l.162-.53zm0 4a.27.27 0 0 1 .516 0l.162.53c.035.115.14.194.258.194h.551c.259 0 .37.333.164.493l-.468.363a.277.277 0 0 0-.094.3l.173.569c.078.256-.213.462-.423.3l-.417-.324a.267.267 0 0 0-.328 0l-.417.323c-.21.163-.5-.043-.423-.299l.173-.57a.277.277 0 0 0-.094-.299l-.468-.363c-.206-.16-.095-.493.164-.493h.551a.267.267 0 0 1 .258-.194l.162-.53zm0 4a.27.27 0 0 1 .516 0l.162.53c.035.115.14.194.258.194h.551c.259 0 .37.333.164.493l-.468.363a.277.277 0 0 0-.094.3l.173.569c.078.256-.213.462-.423.3l-.417-.324a.267.267 0 0 0-.328 0l-.417.323c-.21.163-.5-.043-.423-.299l.173-.57a.277.277 0 0 0-.094-.299l-.468-.363c-.206-.16-.095-.493.164-.493h.551a.267.267 0 0 1 .258-.194l.162-.53z" />
+                                    </svg>
+                                    إدارة التعليمات
+                                </h2>
+                                <button class="btn btn-primary px-4 rounded-pill shadow-sm" data-bs-toggle="modal"
+                                    data-bs-target="#addModal">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor"
+                                        class="me-1" viewBox="0 0 16 16">
+                                        <path fill-rule="evenodd"
+                                            d="M8 2a.5.5 0 0 1 .5.5v5h5a.5.5 0 0 1 0 1h-5v5a.5.5 0 0 1-1 0v-5h-5a.5.5 0 0 1 0-1h5v-5A.5.5 0 0 1 8 2Z" />
+                                    </svg>
+                                    إضافة تعليمات جديدة
+                                </button>
+                            </div>
+
+                            <% if (instructions.length===0) { %>
+                                <div class="text-center py-5 glass-card mb-4"
+                                    style="background: rgba(255,255,255,0.03);">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" fill="currentColor"
+                                        class="opacity-25 mb-3" viewBox="0 0 16 16">
+                                        <path
+                                            d="M5 10.5a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 0 1h-2a.5.5 0 0 1-.5-.5zm0-2a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5zm0-2a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5z" />
+                                        <path
+                                            d="M3 0h10a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2zm0 1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H3z" />
+                                    </svg>
+                                    <h4 class="text-white-50">لا توجد تعليمات مخصصة حالياً</h4>
+                                    <p class="text-secondary">البوت شغال حالياً بالتعليمات الافتراضية فقط.</p>
+                                    <button class="btn btn-outline-primary rounded-pill mt-2 px-4"
+                                        data-bs-toggle="modal" data-bs-target="#addModal">أضف معلومات شغلك
+                                        دلوقتي</button>
+                                </div>
+                            <% } else { %>
+                                <div class="kw-panel mt-0" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.05);">
+                                    <div class="kw-panel-header" style="background: rgba(0, 0, 0, 0.2); border-color: rgba(255, 255, 255, 0.05);">
+                                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                                            <span class="text-white fw-bold"><i class="bi bi-table"></i> جدول التعليمات والكلمات المفتاحية</span>
+                                            <span class="text-white-50 small">(<%= instructions.length %> تعليمة)</span>
+                                            <span id="kwConflictBadge" class="badge-conflict" style="display:none;"></span>
+                                        </div>
+                                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                                            <input type="text" id="kwSearch" class="kw-search" placeholder="🔍 بحث عن تعليمات...">
+                                            <span class="text-white-50 small">
+                                                <span class="kw-tag conflict-kw">تعارض</span> = كلمة مكررة
+                                            </span>
+                                            <button class="btn btn-sm btn-danger d-none" id="btnDeleteSelected" title="حذف المحدد">حذف المحدد (<span id="selectedCount">0</span>)</button>
+                                            <button class="btn btn-sm btn-outline-danger" id="btnDeleteAll" title="حذف الكل">حذف الكل</button>
+                                        </div>
+                                    </div>
+
+                                    <div class="kw-table-wrap" style="max-height: 600px;">
+                                        <table class="kw-table">
+                                            <thead>
+                                                <tr>
+                                                    <th style="width:40px" class="text-center">
+                                                        <input type="checkbox" id="selectAllInst" class="form-check-input bg-dark border-secondary" style="cursor:pointer;" title="تحديد الكل">
+                                                    </th>
+                                                    <th style="width:65px">ID</th>
+                                                    <th style="min-width:160px">العنوان / التصنيف</th>
+                                                    <th style="min-width:400px">المحتوى والصور</th>
+                                                    <th style="width:80px" class="text-center">الكلمات المفتاحية</th>
+                                                    <th style="width:140px" class="text-center">إجراءات</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="kwTableBody">
+                                                <% instructions.forEach(inst => { %>
+                                                    <tr data-name="<%= inst.clientName.toLowerCase() %>" data-keywords="<%= (inst.keywords || '').toLowerCase() %>" data-id="<%= inst.id %>">
+                                                        <td class="align-middle text-center">
+                                                            <input type="checkbox" class="form-check-input border-secondary inst-checkbox bg-dark" value="<%= inst.id %>" style="cursor:pointer;" data-id="<%= inst.id %>">
+                                                        </td>
+                                                        <td>
+                                                            <span class="badge-id">#<%= inst.id %></span>
+                                                            <button class="copy-id-btn" onclick="copyInstId(<%= inst.id %>)" title="نسخ ID">
+                                                                <i class="bi bi-clipboard"></i>
+                                                            </button>
+                                                        </td>
+                                                        <td>
+                                                            <div class="fw-semibold text-white mb-1"><%= inst.clientName %></div>
+                                                            <% if (inst.actionTarget) { %>
+                                                                <span class="badge bg-success px-2 py-1 rounded small">
+                                                                    📤 <%= inst.actionTarget %>
+                                                                </span>
+                                                            <% } %>
+                                                            <% if (inst.type === 'global') { %>
+                                                                <span class="badge-kw-global mt-1 d-inline-block">عام</span>
+                                                            <% } else { %>
+                                                                <span class="badge-kw-topic mt-1 d-inline-block">موضوع</span>
+                                                            <% } %>
+                                                        </td>
+                                                        <td>
+                                                            <div class="text-light mb-2 mt-1 lh-base" style="white-space: pre-wrap; max-height: 160px; overflow-y: auto; font-size: 14.5px;"><%= inst.content %></div>
+                                                        </td>
+                                                        <td class="align-middle text-center">
+                                                            <% if (inst.keywords) { %>
+                                                                <div class="d-flex justify-content-center align-items-center mb-1">
+                                                                    <button class="btn btn-sm btn-outline-primary py-1 px-3 rounded-pill toggle-kw-btn border-1" onclick="toggleKeywords(<%= inst.id %>)" title="عرض الكلمات المفتاحية">
+                                                                        <i class="bi bi-eye" id="eye-icon-<%= inst.id %>"></i>
+                                                                    </button>
+                                                                </div>
+                                                                <div id="kw-container-<%= inst.id %>" class="d-flex flex-wrap justify-content-center gap-1 mt-2" style="display: none !important;">
+                                                                <% inst.keywords.split(',').forEach(kw => { %>
+                                                                    <span class="kw-tag" data-kw="<%= kw.trim().toLowerCase() %>"><%= kw.trim() %></span>
+                                                                <% }) %>
+                                                                </div>
+                                                            <% } else { %>
+                                                                <span class="text-white-50 small">— لا يوجد</span>
+                                                            <% } %>
+                                                        </td>
+                                                        <td class="text-center align-middle">
+                                                            <div class="d-flex justify-content-center align-items-center gap-2">
+                                                                <form action="/dashboard/instructions/toggle/<%= inst.id %>" method="POST" class="m-0" title="تفعيل/تعطيل">
+                                                                    <div class="form-check form-switch m-0 d-flex align-items-center justify-content-center" style="padding-left: 0;">
+                                                                        <input class="form-check-input m-0" type="checkbox" onchange="this.form.submit()" <%= inst.isActive ? 'checked' : '' %> style="cursor: pointer; width: 2.2em; height: 1.1em;">
+                                                                    </div>
+                                                                </form>
+                                                                <button class="btn btn-sm btn-outline-info rounded px-2"
+                                                                    onclick="editInstruction(this)"
+                                                                    data-id="<%= inst.id %>"
+                                                                    data-client-name="<%= encodeURIComponent(inst.clientName || '') %>"
+                                                                    data-content="<%= encodeURIComponent(inst.content || '') %>"
+                                                                    data-action-target="<%= encodeURIComponent(inst.actionTarget || '') %>"
+                                                                    data-image-url="<%= encodeURIComponent(inst.imageUrl || '') %>"
+                                                                    data-keywords="<%= encodeURIComponent(inst.keywords || '') %>"
+                                                                    title="تعديل">
+                                                                    <i class="bi bi-pencil-square"></i>
+                                                                </button>
+
+                                                                <form action="/dashboard/instructions/delete" method="POST" class="m-0 d-inline" onsubmit="return confirm('هل أنت متأكد من حذف هذه التعليمات؟')">
+                                                                    <input type="hidden" name="id" value="<%= inst.id %>">
+                                                                    <button type="submit" class="btn btn-sm btn-outline-danger rounded px-2" title="حذف">
+                                                                        <i class="bi bi-trash3"></i>
+                                                                    </button>
+                                                                </form>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                <% }) %>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            <% } %>
+                        </div>
+
+                    <!-- Add Modal -->
+
+                    <div class="modal fade" id="addModal" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-lg modal-dialog-centered">
+                            <div class="modal-content"
+                                style="background: #1e293b; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
+                                <div class="modal-header border-bottom border-secondary border-opacity-25">
+                                    <h5 class="modal-title text-white fw-bold">إضافة تعليمات جديدة</h5>
+                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                                        aria-label="Close"></button>
+                                </div>
+                                <form action="/dashboard/instructions/add" method="POST">
+                                    <div class="modal-body p-4">
+                                        <div class="mb-4">
+                                            <div class="d-flex align-items-center mb-2">
+                                                <label class="form-label text-white fw-bold m-0">التصنيف / الفئة</label>
+                                                <span class="info-btn" data-bs-toggle="popover" tabindex="0"
+                                                    title="نصيحة للتصنيف" data-bs-html="true"
+                                                    data-bs-content="الاسم ده بيساعدك تنظم تعليماتك. اختار اسم واضح للمجموعة دي.<br><br><b>أمثلة:</b><ul class='helper-example-list'><li>✅ أسعار المنيو</li><li>✅ سياسة الشحن</li><li>✅ فروعنا المتاحة</li></ul>">?</span>
+                                            </div>
+                                            <input type="text" name="clientName"
+                                                class="form-control form-control-lg bg-dark text-white border-secondary"
+                                                required placeholder="مثال: أسعار الملابس، معلومات الشحن، عروض الصيف">
+                                        </div>
+                                        <div class="mb-4">
+                                            <div class="d-flex align-items-center mb-2">
+                                                <label class="form-label text-white fw-bold m-0">العنوان / الاسم</label>
+                                                <span class="info-btn" data-bs-toggle="popover" tabindex="0"
+                                                    title="عنوان التعليمة" data-bs-html="true"
+                                                    data-bs-content="اسم مختصر للتعليمة يوضح موضوعها.<br><br><b>أمثلة:</b><ul class='helper-example-list'><li>✅ ترحيب عام</li><li>✅ معلومات الشحن</li><li>✅ سعر المنتج</li></ul>">?</span>
+                                            </div>
+                                            <input type="text" name="title"
+                                                class="form-control form-control-lg bg-dark text-white border-secondary"
+                                                required placeholder="مثال: ترحيب العملاء، أسعار التوصيل">
+                                        </div>
+                                        <div class="mb-4">
+                                            <div class="d-flex align-items-center mb-2">
+                                                <label class="form-label text-white fw-bold m-0">محتوى التعليمات</label>
+                                                <span class="info-btn" data-bs-toggle="popover" tabindex="0"
+                                                    title="طريقة كتابة التعليمات" data-bs-html="true"
+                                                    data-bs-content="اكتب كل حاجة عايز البوت يعرفها بوضوح. كل ما زودت تفاصيل، كل ما كان الرد أدق.<br><br><b>أمثلة حقيقية:</b><ul class='helper-example-list'><li>1️⃣ سعر الكوتشي 450ج ومتاح لون أسود وأبيض.</li><li>2️⃣ بنفتح يومياً من 11 ص لـ 11 م ماعدا الجمعة.</li><li>3️⃣ الشحن بياخد 3 أيام وتكلفتة 40ج داخل القاهرة.</li></ul>">?</span>
+                                            </div>
+                                            <textarea name="content"
+                                                class="form-control bg-dark text-white border-secondary" required
+                                                placeholder="اكتب كل التفاصيل اللي عايز البوت يعرفها هنا.&#10;مثال:&#10;- سعر التيشرت 200ج والمقاسات من L لـ XXL.&#10;- الشحن بياخد 3 أيام ومجاني لو اشتريت بـ 1000ج.&#10;- عندنا فرع في المهندسين وفرع في التجمع."
+                                                style="min-height: 250px;"></textarea>
+                                        </div>
+
+
+
+                                        <div class="d-flex align-items-center mb-2">
+                                            <label class="form-label text-white fw-bold m-0">🎯 إرسال الطلب إلى (Action
+                                                Target)</label>
+                                            <span class="info-btn" data-bs-toggle="popover" tabindex="0"
+                                                title="توجيه الطلبات" data-bs-html="true"
+                                                data-bs-content="لو العميل سأل على حاجة وعايزه يطلبها، البوت هيبعت بيانات العميل للجروب ده.<br><br><b>أمثلة للجروبات:</b><ul class='helper-example-list'><li>✅ جروب المبيعات</li><li>✅ جروب طلبات الصيانة</li><li>✅ جروب الإدارة</li></ul>">?</span>
+                                        </div>
+                                        <div class="input-group shadow-sm">
+                                            <select name="actionTarget" id="addActionTarget"
+                                                class="form-select form-select-lg bg-dark text-white border-secondary">
+                                                <option value="">-- اختر الجروب --</option>
+                                                <% if (typeof groups !=='undefined' && groups.length> 0) { %>
+                                                    <% groups.forEach(group=> { %>
+                                                        <option value="<%= group.subject %>">
+                                                            <%= group.subject %>
+                                                        </option>
+                                                        <% }); %>
+                                                            <% } else { %>
+                                                                <option value="" disabled>⚠️ يجب ربط الواتساب لإظهار
+                                                                    الجروبات</option>
+                                                                <% } %>
+                                            </select>
+                                            <button class="btn btn-secondary border-secondary px-3" type="button"
+                                                id="refreshGroupsBtn" title="تحديث الجروبات" onclick="refreshGroups()">
+                                                🔄
+                                            </button>
+                                        </div>
+                                        <div class="form-text text-white-50">اختر الجروب الذي سيتم إرسال الطلبات إليه.
+                                        </div>
+                                    </div>
+
+                                    <div class="modal-footer border-top border-secondary border-opacity-25">
+                                        <button type="button" class="btn btn-link text-white-50 text-decoration-none"
+                                            data-bs-dismiss="modal">إلغاء</button>
+                                        <button type="submit" class="btn btn-primary px-5 rounded-pill fw-bold">حفظ
+                                            التعليمات</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Edit Modal -->
+                    <div class="modal fade" id="editModal" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-lg modal-dialog-centered">
+                            <div class="modal-content"
+                                style="background: #1e293b; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
+                                <div class="modal-header border-bottom border-secondary border-opacity-25">
+                                    <h5 class="modal-title text-white fw-bold">تعديل التعليمات</h5>
+                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                                        aria-label="Close"></button>
+                                </div>
+                                <form action="/dashboard/instructions/edit" method="POST">
+                                    <input type="hidden" name="id" id="editId">
+                                    <div class="modal-body p-4">
+                                        <div class="mb-4">
+                                            <div class="d-flex align-items-center mb-2">
+                                                <label class="form-label text-white fw-bold m-0">التصنيف / الفئة</label>
+                                                <span class="info-btn" data-bs-toggle="popover" tabindex="0"
+                                                    title="التصنيف" data-bs-html="true"
+                                                    data-bs-content="استخدم اسم واضح يسهل عليك إدارة التعليمات لاحقاً.<br><br><b>أمثلة:</b><ul class='helper-example-list'><li>✅ منيو الاكل</li><li>✅ أسعار التوصيل</li><li>✅ سياسة الترجيع</li></ul>">?</span>
+                                            </div>
+                                            <input type="text" name="clientName" id="editClientName"
+                                                class="form-control form-control-lg bg-dark text-white border-secondary"
+                                                required placeholder="مثال: أسعار الملابس، معلومات الشحن">
+                                        </div>
+                                        <div class="mb-4">
+                                            <div class="d-flex align-items-center mb-2">
+                                                <label class="form-label text-white fw-bold m-0">محتوى التعليمات</label>
+                                                <span class="info-btn" data-bs-toggle="popover" tabindex="0"
+                                                    title="المحتوى" data-bs-html="true"
+                                                    data-bs-content="تأكد من تحديث الأسعار والمواصفات بشكل دقيق.<br><br><b>أمثلة:</b><ul class='helper-example-list'><li>1️⃣ متاح مقاسات من M لـ XXL.</li><li>2️⃣ سعر الكيلو 150ج وعندنا عرض 2 كيلو بـ 250ج.</li><li>3️⃣ الشحن مجاني لأي أوردر فوق الـ 500ج.</li></ul>">?</span>
+                                            </div>
+                                            <textarea name="content" id="editContent"
+                                                class="form-control bg-dark text-white border-secondary" required
+                                                placeholder="اكتب كل التفاصيل اللي عايز البوت يعرفها هنا.&#10;مثال:&#10;- سعر التيشرت 200ج والمقاسات من L لـ XXL.&#10;- الشحن بياخد 3 أيام ومجاني لو اشتريت بـ 1000ج.&#10;- عندنا فرع في المهندسين وفرع في التجمع."
+                                                style="min-height: 250px;"></textarea>
+                                        </div>
+
+                                        <div class="mb-4">
+                                            <div class="d-flex align-items-center mb-2">
+                                                <label class="form-label text-white fw-bold m-0">الكلمات المفتاحية</label>
+                                                <span class="info-btn" data-bs-toggle="popover" tabindex="0" title="الكلمات المفتاحية" data-bs-html="true" data-bs-content="اكتب الكلمة واضغط Enter لإضافتها. والحذف بالضغط على X.">?</span>
+                                            </div>
+                                            <div id="editTagsContainer" class="form-control bg-dark text-white border-secondary d-flex flex-wrap gap-1 align-items-center" style="min-height: 48px; border-radius: 6px; cursor: text;" onclick="document.getElementById('editTagInput').focus()">
+                                                <input type="text" id="editTagInput" class="bg-transparent border-0 text-white flex-grow-1" style="outline: none; min-width: 100px; box-shadow: none;" placeholder="اكتب واضغط Enter...">
+                                            </div>
+                                            <input type="hidden" name="keywords" id="editKeywords">
+                                            <div class="form-text text-white-50 mt-1">تعديل الكلمات المفتاحية بالاضافة والحذف. (اكتب الكلمة واضغط Enter)</div>
+                                        </div>
+
+
+
+                                        <div class="mb-3">
+                                            <div class="d-flex align-items-center mb-2">
+                                                <label class="form-label text-white fw-bold m-0">🎯 إرسال الطلب إلى
+                                                    (Action Target)</label>
+                                                <span class="info-btn" data-bs-toggle="popover" tabindex="0"
+                                                    title="توجيه الطلبات" data-bs-html="true"
+                                                    data-bs-content="لو العميل سأل على حاجة وعايزه يطلبها، البوت هيبعت بيانات العميل للجروب ده.<br><br><b>أمثلة للجروبات:</b><ul class='helper-example-list'><li>✅ جروب المبيعات</li><li>✅ جروب طلبات الصيانة</li><li>✅ جروب الإدارة</li></ul>">?</span>
+                                            </div>
+                                            <div class="input-group shadow-sm">
+                                                <select name="actionTarget" id="editActionTarget"
+                                                    class="form-select form-select-lg bg-dark text-white border-secondary">
+                                                    <option value="">-- اختر الجروب --</option>
+                                                    <% if (typeof groups !=='undefined' && groups.length> 0) { %>
+                                                        <% groups.forEach(group=> { %>
+                                                            <option value="<%= group.subject %>">
+                                                                <%= group.subject %>
+                                                            </option>
+                                                            <% }); %>
+                                                                <% } else { %>
+                                                                    <option value="" disabled>⚠️ يجب ربط الواتساب لإظهار
+                                                                        الجروبات</option>
+                                                                    <% } %>
+                                                </select>
+                                                <button class="btn btn-secondary border-secondary px-3" type="button"
+                                                    id="refreshEditGroupsBtn" title="تحديث الجروبات"
+                                                    onclick="refreshGroups()">
+                                                    🔄
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer border-top border-secondary border-opacity-25">
+                                        <button type="button" class="btn btn-link text-white-50 text-decoration-none"
+                                            data-bs-dismiss="modal">إلغاء</button>
+                                        <button type="submit" class="btn btn-primary px-5 rounded-pill fw-bold">حفظ
+                                            التعديلات</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Loading Overlay -->
+                    <div id="loadingOverlay"
+                        class="d-none position-fixed top-0 start-0 w-100 h-100 d-flex flex-column justify-content-center align-items-center"
+                        style="background: rgba(0, 0, 0, 0.85); z-index: 9999; backdrop-filter: blur(5px);">
+                        <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <h4 class="text-white fw-bold animate-pulse">جاري تحليل التعليمات وتقسيمها بالذكاء الاصطناعي...
+                        </h4>
+                        <p class="text-white-50">لحظات ويتم تجهيز الردود الذكية 🧠</p>
+                    </div>
+
+                    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+                    <script src="/instructions-image-upload.js?v=<%= Date.now() %>"></script>
+                    <script>
+                        // Initialize Bootstrap Popovers
+                        document.addEventListener('DOMContentLoaded', function () {
+                            var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'))
+                            var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
+                                return new bootstrap.Popover(popoverTriggerEl, {
+                                    trigger: 'focus'
+                                })
+                            })
+
+                            // Handle Form Submissions for Loading State
+                            const forms = document.querySelectorAll('form[action="/dashboard/instructions/add"], form[action="/dashboard/instructions/edit"]');
+                            const overlay = document.getElementById('loadingOverlay');
+
+                            forms.forEach(form => {
+                                form.addEventListener('submit', function () {
+                                    const modal = bootstrap.Modal.getInstance(this.closest('.modal'));
+                                    if (modal) modal.hide();
+
+                                    overlay.classList.remove('d-none');
+                                });
+                            });
+                        });
+
+                        function toggleKeywords(id) {
+                            const container = document.getElementById(`kw-container-${id}`);
+                            const icon = document.getElementById(`eye-icon-${id}`);
+                            if (container.style.getPropertyValue('display') === 'none') {
+                                container.style.setProperty('display', 'flex', 'important');
+                                icon.classList.remove('bi-eye');
+                                icon.classList.add('bi-eye-slash');
+                            } else {
+                                container.style.setProperty('display', 'none', 'important');
+                                icon.classList.remove('bi-eye-slash');
+                                icon.classList.add('bi-eye');
+                            }
+                        }
+
+                        // ============================================================
+                        // 🛡️ Keywords Display + Conflict Detection Logic
+                        // ============================================================
+                        function copyInstId(id) {
+                            navigator.clipboard.writeText(String(id)).then(() => {
+                                const badges = document.querySelectorAll('.badge-id');
+                                badges.forEach(b => {
+                                    if (b.textContent.trim() === '#' + id) {
+                                        const orig = b.style.background;
+                                        b.style.background = '#1bc5bd44';
+                                        b.style.color = '#1bc5bd';
+                                        setTimeout(() => {
+                                            b.style.background = '';
+                                            b.style.color = '';
+                                        }, 800);
+                                    }
+                                });
+                            }).catch(() => {
+                                const el = document.createElement('textarea');
+                                el.value = String(id);
+                                document.body.appendChild(el);
+                                el.select();
+                                document.execCommand('copy');
+                                document.body.removeChild(el);
+                            });
+                        }
+
+                        document.addEventListener('DOMContentLoaded', () => {
+                            const kwMap = {};
+                            const rows = document.querySelectorAll('#kwTableBody tr[data-keywords]');
+
+                            // 1. حساب تكرار الكلمات
+                            rows.forEach(row => {
+                                const kwStr = row.getAttribute('data-keywords') || '';
+                                if (!kwStr) return;
+                                const kwList = kwStr.split(',').map(k => k.trim()).filter(k => k.length > 2);
+                                kwList.forEach(kw => {
+                                    if (!kwMap[kw]) kwMap[kw] = [];
+                                    kwMap[kw].push(row);
+                                });
+                            });
+
+                            // Keyword mapping for future use if needed, removed conflict UI updates
+                            rows.forEach(row => {
+                                const kwStr = row.getAttribute('data-keywords') || '';
+                                if (!kwStr) return;
+                                const kwList = kwStr.split(',').map(k => k.trim()).filter(k => k.length > 2);
+                                kwList.forEach(kw => {
+                                    if (!kwMap[kw]) kwMap[kw] = [];
+                                    kwMap[kw].push(row);
+                                });
+                            });
+
+                            // 5. وظيفة البحث في الجدول
+                            const searchInput = document.getElementById('kwSearch');
+                            if (searchInput) {
+                                searchInput.addEventListener('input', () => {
+                                    const query = searchInput.value.toLowerCase().trim();
+                                    rows.forEach(row => {
+                                        const name = row.getAttribute('data-name') || '';
+                                        const kws = row.getAttribute('data-keywords') || '';
+                                        if (!query || name.includes(query) || kws.includes(query)) {
+                                            row.style.display = '';
+                                        } else {
+                                            row.style.display = 'none';
+                                        }
+                                    });
+                                });
+                            }
+
+                            // 6. Delete Multiple/All
+                            const selectAllInst = document.getElementById('selectAllInst');
+                            const instCheckboxes = document.querySelectorAll('.inst-checkbox');
+                            const btnDeleteSelected = document.getElementById('btnDeleteSelected');
+                            const btnDeleteAll = document.getElementById('btnDeleteAll');
+                            const selectedCountSpan = document.getElementById('selectedCount');
+
+                            const updateDeleteSelectedBtn = () => {
+                                const selected = document.querySelectorAll('.inst-checkbox:checked').length;
+                                if (selected > 0) {
+                                    btnDeleteSelected.classList.remove('d-none');
+                                    selectedCountSpan.textContent = selected;
+                                } else {
+                                    btnDeleteSelected.classList.add('d-none');
+                                }
+                                if (selectAllInst) {
+                                    selectAllInst.checked = selected === instCheckboxes.length && instCheckboxes.length > 0;
+                                }
+                            };
+
+                            if (selectAllInst) {
+                                selectAllInst.addEventListener('change', (e) => {
+                                    instCheckboxes.forEach(cb => {
+                                        if (cb.closest('tr').style.display !== 'none') {
+                                            cb.checked = e.target.checked;
+                                        }
+                                    });
+                                    updateDeleteSelectedBtn();
+                                });
+                            }
+
+                            instCheckboxes.forEach(cb => cb.addEventListener('change', updateDeleteSelectedBtn));
+
+                            const deleteAction = async (action, ids = []) => {
+                                try {
+                                    document.getElementById('loadingOverlay').classList.remove('d-none');
+                                    const res = await fetch('/dashboard/instructions/delete-multiple', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ action, ids })
+                                    });
+                                    if (res.ok) {
+                                        window.location.reload();
+                                    } else {
+                                        alert('حدث خطأ أثناء الحذف.');
+                                        document.getElementById('loadingOverlay').classList.add('d-none');
+                                    }
+                                } catch (e) {
+                                    alert('لا يوجد اتصال.');
+                                    document.getElementById('loadingOverlay').classList.add('d-none');
+                                }
+                            };
+
+                            if (btnDeleteSelected) {
+                                btnDeleteSelected.addEventListener('click', () => {
+                                    if (!confirm('هل أنت متأكد من حذف التعليمات المحددة؟')) return;
+                                    const ids = Array.from(document.querySelectorAll('.inst-checkbox:checked')).map(cb => cb.value);
+                                    deleteAction('multiple', ids);
+                                });
+                            }
+
+                            if (btnDeleteAll) {
+                                btnDeleteAll.addEventListener('click', () => {
+                                    if (!confirm('هل أنت متأكد من حذف جميع التعليمات بالكامل؟ هذا الإجراء لا يمكن التراجع عنه.')) return;
+                                    deleteAction('all');
+                                });
+                            }
+                        });
+                    </script>
+</body>
+</html>

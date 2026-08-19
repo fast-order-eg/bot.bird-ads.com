@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>التحليلات — لينا بوت</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="/style.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        /* Override glass-card max-width only on this page */
+        .an-wrapper .glass-card {
+            max-width: 100% !important;
+            margin: 0 !important;
+        }
+
+        .stat-card {
+            background: rgba(30,41,59,.6);
+            border: 1px solid rgba(255,255,255,.08);
+            border-radius: 14px;
+            padding: 18px 20px;
+            display: flex; align-items: center; gap: 14px;
+            transition: transform .25s, box-shadow .25s;
+        }
+        .stat-card:hover { transform: translateY(-3px); box-shadow: 0 14px 35px rgba(0,0,0,.3); }
+        .stat-icon { width:46px; height:46px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; }
+        .stat-value { font-size:1.7rem; font-weight:800; color:#f1f5f9; line-height:1; }
+        .stat-label { font-size:11px; color:#64748b; margin-top:4px; }
+
+        .chart-card {
+            background: rgba(30,41,59,.6);
+            border: 1px solid rgba(255,255,255,.08);
+            border-radius: 14px;
+            padding: 20px;
+            max-width: 100% !important;
+            margin: 0 !important;
+        }
+        .chart-title { font-size:14px; font-weight:700; color:#f1f5f9; margin-bottom:16px; display:flex; align-items:center; justify-content:space-between; }
+        .filter-btns .btn { font-size:12px; padding:4px 12px; border-radius:8px; }
+        .filter-btns .btn.active { background:#6366f1!important; border-color:#6366f1!important; color:#fff!important; }
+        .kw-tag { background:rgba(99,102,241,.15); color:#818cf8; border:1px solid rgba(99,102,241,.25); border-radius:5px; padding:2px 7px; font-size:11px; display:inline-block; margin:2px; }
+    </style>
+</head>
+<body>
+    <%- include('partials/navbar') %>
+    <%- include('partials/sidebar', { handoffCount: handoffCount || 0 }) %>
+
+    <div class="container-fluid main-content px-4 px-lg-5 pb-5 animate-fade-in an-wrapper">
+
+        <!-- Title + Filter -->
+        <div class="d-flex flex-wrap align-items-center justify-content-between mb-4 gap-3">
+            <div>
+                <h5 class="fw-bold text-white m-0"><i class="bi bi-graph-up-arrow me-2" style="color:#6366f1;"></i>لوحة التحليلات</h5>
+                <p class="text-white-50 small m-0">مراقبة أداء البوت واستهلاك التوكنز</p>
+            </div>
+            <div class="filter-btns d-flex gap-2 align-items-center flex-wrap">
+                <span class="text-white-50 small"><i class="bi bi-calendar3 me-1"></i>فلتر:</span>
+                <button class="btn btn-outline-secondary btn-sm active" onclick="applyFilter(this,7)">آخر 7 أيام</button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="applyFilter(this,30)">آخر 30 يوم</button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="applyFilter(this,90)">آخر 3 شهور</button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="applyFilter(this,0)">الكل</button>
+            </div>
+        </div>
+
+        <!-- Row 1 -->
+        <div class="row g-3 mb-3">
+            <div class="col-6 col-lg-3">
+                <div class="stat-card"><div class="stat-icon" style="background:rgba(99,102,241,.15);">💬</div><div><div class="stat-value" id="sTotal"><%= totalMessages.toLocaleString('ar-EG') %></div><div class="stat-label">إجمالي الرسائل</div></div></div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="stat-card"><div class="stat-icon" style="background:rgba(16,185,129,.15);">👥</div><div><div class="stat-value" id="sConvs"><%= totalConversations.toLocaleString('ar-EG') %></div><div class="stat-label">إجمالي المحادثات</div></div></div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="stat-card"><div class="stat-icon" style="background:rgba(245,158,11,.15);">📅</div><div><div class="stat-value" id="sToday"><%= messagesToday.toLocaleString('ar-EG') %></div><div class="stat-label">رسائل اليوم</div></div></div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="stat-card"><div class="stat-icon" style="background:rgba(239,68,68,.15);">⚡</div><div><div class="stat-value"><%= tokensUsed.toLocaleString('ar-EG') %></div><div class="stat-label">توكنز مستهلكة</div></div></div>
+            </div>
+        </div>
+
+        <!-- Row 2 -->
+        <div class="row g-3 mb-4">
+            <div class="col-6 col-lg-3">
+                <div class="stat-card"><div class="stat-icon" style="background:rgba(99,102,241,.15);">📥</div><div><div class="stat-value" id="sIn"><%= inbound.toLocaleString('ar-EG') %></div><div class="stat-label">رسائل وردت</div></div></div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="stat-card"><div class="stat-icon" style="background:rgba(16,185,129,.15);">📤</div><div><div class="stat-value" id="sOut"><%= outbound.toLocaleString('ar-EG') %></div><div class="stat-label">ردود البوت</div></div></div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="stat-card"><div class="stat-icon" style="background:rgba(245,158,11,.15);">👤</div><div><div class="stat-value" id="sHO"><%= handoffCount.toLocaleString('ar-EG') %></div><div class="stat-label">تحويل للموظف</div></div></div>
+            </div>
+            <div class="col-6 col-lg-3">
+                <div class="stat-card"><div class="stat-icon" style="background:rgba(139,92,246,.15);">📊</div><div><div class="stat-value" id="sRate"><%= (totalMessages>0?((outbound/totalMessages)*100).toFixed(0):0) %>%</div><div class="stat-label">معدل الرد</div></div></div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="row g-3 mb-4">
+            <div class="col-lg-8">
+                <div class="chart-card">
+                    <div class="chart-title">
+                        <span><i class="bi bi-bar-chart-line me-2" style="color:#6366f1;"></i><span id="chartLbl">الرسائل آخر 7 أيام</span></span>
+                    </div>
+                    <canvas id="barC" height="220"></canvas>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="chart-card" style="height:100%;">
+                    <div class="chart-title"><span><i class="bi bi-pie-chart me-2" style="color:#6366f1;"></i>توزيع الرسائل</span></div>
+                    <canvas id="donutC" height="190"></canvas>
+                    <div class="mt-3 d-flex flex-column gap-2">
+                        <div class="d-flex align-items-center gap-2"><div style="width:10px;height:10px;border-radius:3px;background:#6366f1;flex-shrink:0;"></div><span style="font-size:12px;color:#94a3b8;">وردت (<span id="dIn"><%= inbound %></span>)</span></div>
+                        <div class="d-flex align-items-center gap-2"><div style="width:10px;height:10px;border-radius:3px;background:#10b981;flex-shrink:0;"></div><span style="font-size:12px;color:#94a3b8;">ردود البوت (<span id="dOut"><%= outbound %></span>)</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Instructions Table -->
+        <div class="chart-card">
+            <div class="chart-title"><span><i class="bi bi-book me-2" style="color:#6366f1;"></i>التعليمات النشطة</span></div>
+            <% if (!instructions.length) { %>
+            <div class="text-center text-muted py-3" style="font-size:13px;">لا توجد تعليمات نشطة</div>
+            <% } else { %>
+            <div class="table-responsive">
+                <table class="table table-dark table-hover table-borderless mb-0" style="font-size:12px;">
+                    <thead style="background:rgba(255,255,255,0.04);">
+                        <tr><th style="width:55px;">ID</th><th>الاسم</th><th style="width:90px;">النوع</th><th>الكلمات المفتاحية</th></tr>
+                    </thead>
+                    <tbody>
+                        <% instructions.forEach(inst => { %>
+                        <tr>
+                            <td><span class="badge bg-secondary">#<%= inst.id %></span></td>
+                            <td class="fw-semibold text-white"><%= inst.clientName %></td>
+                            <td><% if(inst.type==='global'){%><span class="badge" style="background:rgba(16,185,129,.2);color:#10b981;">🌐 عام</span><%}else{%><span class="badge" style="background:rgba(99,102,241,.2);color:#818cf8;">🏷️ موضوعي</span><%}%></td>
+                            <td><% if(inst.keywords){inst.keywords.split(',').forEach(k=>{%><span class="kw-tag"><%= k.trim() %></span><%})}else{%><span class="text-muted">—</span><%}%></td>
+                        </tr>
+                        <% }) %>
+                    </tbody>
+                </table>
+            </div>
+            <% } %>
+        </div>
+
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+    const raw = <%- last7Days %>;
+    let barC, donutC;
+
+    function mkBar(data){
+        const ctx=document.getElementById('barC').getContext('2d');
+        if(barC) barC.destroy();
+        barC=new Chart(ctx,{type:'bar',data:{labels:data.map(d=>d.label),datasets:[{label:'الرسائل',data:data.map(d=>d.count),backgroundColor:'rgba(99,102,241,.45)',borderColor:'#6366f1',borderWidth:2,borderRadius:8,borderSkipped:false,hoverBackgroundColor:'rgba(99,102,241,.7)'}]},options:{responsive:true,animation:{duration:400},plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#64748b',font:{size:11}},grid:{color:'rgba(255,255,255,0.04)'}},y:{ticks:{color:'#64748b',font:{size:11}},grid:{color:'rgba(255,255,255,0.04)'},beginAtZero:true}}}});
+    }
+    function mkDonut(iv,ov){
+        const ctx=document.getElementById('donutC').getContext('2d');
+        if(donutC) donutC.destroy();
+        donutC=new Chart(ctx,{type:'doughnut',data:{labels:['وردت','ردود البوت'],datasets:[{data:[iv,ov],backgroundColor:['rgba(99,102,241,.7)','rgba(16,185,129,.7)'],borderColor:['#6366f1','#10b981'],borderWidth:2,hoverOffset:8}]},options:{responsive:true,plugins:{legend:{display:false}},cutout:'65%',animation:{duration:400}}});
+    }
+    mkBar(raw);
+    mkDonut(<%= inbound %>, <%= outbound %>);
+
+    const lbls={7:'الرسائل آخر 7 أيام',30:'الرسائل آخر 30 يوم',90:'الرسائل آخر 3 شهور',0:'كل الرسائل'};
+
+    async function applyFilter(btn,days){
+        document.querySelectorAll('.filter-btns .btn').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('chartLbl').textContent=lbls[days]||'';
+        const r=await fetch(`/dashboard/analytics/data?days=${days}`);
+        if(!r.ok) return;
+        const d=await r.json();
+        document.getElementById('sTotal').textContent  =d.totalMessages.toLocaleString('ar-EG');
+        document.getElementById('sConvs').textContent  =d.totalConversations.toLocaleString('ar-EG');
+        document.getElementById('sToday').textContent  =d.messagesToday.toLocaleString('ar-EG');
+        document.getElementById('sIn').textContent     =d.inbound.toLocaleString('ar-EG');
+        document.getElementById('sOut').textContent    =d.outbound.toLocaleString('ar-EG');
+        document.getElementById('sHO').textContent     =d.handoffCount.toLocaleString('ar-EG');
+        document.getElementById('sRate').textContent   =(d.totalMessages>0?((d.outbound/d.totalMessages)*100).toFixed(0):0)+'%';
+        document.getElementById('dIn').textContent     =d.inbound;
+        document.getElementById('dOut').textContent    =d.outbound;
+        mkBar(d.chartData);
+        mkDonut(d.inbound,d.outbound);
+    }
+    </script>
+</body>
+</html>

@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>القوائم والأزرار التفاعلية</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="/style.css?v=<%= Date.now() %>" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+<style>
+    .menu-card {
+        background: rgba(0,0,0,0.2);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 16px;
+        padding: 20px;
+        margin-bottom: 24px;
+    }
+    .menu-header {
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+        padding-bottom: 16px;
+        margin-bottom: 16px;
+    }
+    .btn-card {
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 12px;
+        transition: all 0.3s ease;
+        position: relative;
+    }
+    .btn-card:hover {
+        border-color: rgba(99, 102, 241, 0.3);
+        background: rgba(99, 102, 241, 0.04);
+        transform: translateY(-2px);
+    }
+    .btn-card.inactive {
+        opacity: 0.5;
+    }
+    .btn-order-badge {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        background: rgba(99, 102, 241, 0.2);
+        color: #818cf8;
+        border: 1px solid rgba(99, 102, 241, 0.3);
+        padding: 2px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    .btn-label {
+        font-size: 16px;
+        font-weight: 700;
+        color: #f8fafc;
+        margin-bottom: 6px;
+    }
+    .btn-response-preview {
+        color: #94a3b8;
+        font-size: 13px;
+        line-height: 1.5;
+        max-height: 60px;
+        overflow: hidden;
+        white-space: pre-wrap;
+    }
+    .btn-meta {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+    }
+    .btn-meta-tag {
+        font-size: 11px;
+        padding: 3px 10px;
+        border-radius: 20px;
+        font-weight: 500;
+    }
+    .tag-platform-both { background: #1bc5bd22; color: #1bc5bd; border: 1px solid #1bc5bd44; }
+    .tag-platform-whatsapp { background: #25D36622; color: #25D366; border: 1px solid #25D36644; }
+    .tag-platform-messenger { background: #006AFF22; color: #4F9AFF; border: 1px solid #006AFF44; }
+    .tag-ai-yes { background: #f59e0b22; color: #f59e0b; border: 1px solid #f59e0b44; }
+    .tag-ai-no { background: #8950fc22; color: #a78bfa; border: 1px solid #8950fc44; }
+    
+    .trigger-words-box {
+        background: rgba(255,255,255,0.05);
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-size: 13px;
+        color: #e2e8f0;
+        margin-top: 8px;
+    }
+    .trigger-badge {
+        background: rgba(99, 102, 241, 0.2);
+        color: #a5b4fc;
+        padding: 2px 8px;
+        border-radius: 12px;
+        margin-left: 4px;
+        display: inline-block;
+    }
+</style>
+</head>
+
+<body>
+    <%- include('partials/navbar') %>
+    <%- include('partials/sidebar') %>
+
+    <div class="container-fluid main-content px-4 px-lg-5">
+        <div class="glass-card p-4 p-md-5 animate-fade-in">
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-center mb-4 gap-3">
+                <h2 class="m-0 fw-bold d-flex align-items-center gap-2 text-white">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="var(--primary-color)" viewBox="0 0 16 16">
+                        <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V2zm2-1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H4z"/>
+                        <path d="M5 4h6a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5H5a.5.5 0 0 1-.5-.5v-1A.5.5 0 0 1 5 4zm0 3h6a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5H5a.5.5 0 0 1-.5-.5v-1A.5.5 0 0 1 5 7zm0 3h6a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5H5a.5.5 0 0 1-.5-.5v-1A.5.5 0 0 1 5 10z"/>
+                    </svg>
+                    القوائم والأزرار
+                </h2>
+                <button class="btn btn-primary px-4 rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#addMenuModal">
+                    <i class="bi bi-folder-plus me-1"></i>
+                    إنشاء قائمة جديدة
+                </button>
+            </div>
+
+            <!-- 🤖 Bot Mode Selector -->
+            <div class="mb-4 p-4 rounded-4" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1);">
+                <h5 class="text-white fw-bold mb-3 d-flex align-items-center gap-2">
+                    <i class="bi bi-robot text-primary"></i> وضع تشغيل البوت
+                </h5>
+                
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <div class="bot-mode-card <%= botMode === 'hybrid' ? 'active' : '' %>" onclick="setBotMode('hybrid')" id="mode-hybrid" style="cursor: pointer; padding: 15px; border-radius: 12px; border: 2px solid <%= botMode === 'hybrid' ? '#6366f1' : 'rgba(255,255,255,0.1)' %>; background: <%= botMode === 'hybrid' ? 'rgba(99, 102, 241, 0.1)' : 'transparent' %>; transition: all 0.3s ease; height: 100%;">
+                            <div class="d-flex justify-content-between mb-2">
+                                <h6 class="fw-bold mb-0 text-white"><i class="bi bi-shuffle text-primary me-1"></i> الوضع المتكامل</h6>
+                                <% if (botMode === 'hybrid') { %><i class="bi bi-check-circle-fill text-primary"></i><% } %>
+                            </div>
+                            <p class="text-white-50 small mb-0">أزرار + ذكاء اصطناعي. (موصى به) البوت يبدأ بالقوائم، وإذا كتب العميل رسالة حرة يرد الذكاء الاصطناعي.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="bot-mode-card <%= botMode === 'menu_only' ? 'active' : '' %>" onclick="setBotMode('menu_only')" id="mode-menu_only" style="cursor: pointer; padding: 15px; border-radius: 12px; border: 2px solid <%= botMode === 'menu_only' ? '#22c55e' : 'rgba(255,255,255,0.1)' %>; background: <%= botMode === 'menu_only' ? 'rgba(34, 197, 94, 0.1)' : 'transparent' %>; transition: all 0.3s ease; height: 100%;">
+                            <div class="d-flex justify-content-between mb-2">
+                                <h6 class="fw-bold mb-0 text-white"><i class="bi bi-list-ul text-success me-1"></i> قوائم فقط</h6>
+                                <% if (botMode === 'menu_only') { %><i class="bi bi-check-circle-fill text-success"></i><% } %>
+                            </div>
+                            <p class="text-white-50 small mb-0">أزرار فقط. لا يوجد ذكاء اصطناعي. إذا كتب العميل رسالة حرة يُطلب منه اختيار رقم من القائمة.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <div class="bot-mode-card <%= botMode === 'ai_only' ? 'active' : '' %>" onclick="setBotMode('ai_only')" id="mode-ai_only" style="cursor: pointer; padding: 15px; border-radius: 12px; border: 2px solid <%= botMode === 'ai_only' ? '#f59e0b' : 'rgba(255,255,255,0.1)' %>; background: <%= botMode === 'ai_only' ? 'rgba(245, 158, 11, 0.1)' : 'transparent' %>; transition: all 0.3s ease; height: 100%;">
+                            <div class="d-flex justify-content-between mb-2">
+                                <h6 class="fw-bold mb-0 text-white"><i class="bi bi-cpu text-warning me-1"></i> الوضع المفتوح</h6>
+                                <% if (botMode === 'ai_only') { %><i class="bi bi-check-circle-fill text-warning"></i><% } %>
+                            </div>
+                            <p class="text-white-50 small mb-0">ذكاء اصطناعي فقط. لا يتم إرسال أزرار. البوت يتعامل كمندوب مبيعات مفتوح بناءً على التعليمات.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-4 p-3 rounded-3" style="background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.2);">
+                <div class="d-flex align-items-start gap-2">
+                    <i class="bi bi-info-circle-fill text-primary mt-1"></i>
+                    <div class="text-white-50 small">
+                        يمكنك الآن إنشاء <strong>قوائم متعددة</strong>، كل قائمة تعمل بكلمات مفتاحية مختلفة.<br>
+                        العميل بمجرد أن يكتب أي كلمة من "كلمات التشغيل"، سيقوم البوت بإرسال الأزرار التابعة لهذه القائمة فقط.
+                    </div>
+                </div>
+            </div>
+
+            <div class="row justify-content-center">
+                <div class="col-lg-9">
+                    <% if (!menus || menus.length === 0) { %>
+                        <div class="text-center py-5" style="background: rgba(255,255,255,0.02); border-radius: 16px; border: 1px dashed rgba(255,255,255,0.1);">
+                            <div class="mb-3">
+                                <i class="bi bi-ui-radios-grid text-primary opacity-50" style="font-size: 48px;"></i>
+                            </div>
+                            <h4 class="text-white-50 fw-bold">لا توجد قوائم حالياً</h4>
+                            <p class="text-secondary mb-3">قم بإنشاء أول قائمة وحدد كلمات التشغيل الخاصة بها.</p>
+                            <button class="btn btn-outline-primary rounded-pill px-4" data-bs-toggle="modal" data-bs-target="#addMenuModal">
+                                <i class="bi bi-folder-plus me-1"></i> إنشاء قائمة
+                            </button>
+                        </div>
+                    <% } else { %>
+                        <% menus.forEach((menu) => { %>
+                            <div class="menu-card">
+                                <!-- Menu Header -->
+                                <div class="menu-header d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <h5 class="text-white fw-bold mb-1">
+                                            <i class="bi bi-menu-button-wide text-primary me-2"></i> <%= menu.menuName %>
+                                            <% if (menu.isDefault) { %>
+                                                <span class="badge bg-warning text-dark ms-2" style="font-size: 12px;"><i class="bi bi-star-fill"></i> القائمة الرئيسية</span>
+                                            <% } %>
+                                        </h5>
+                                        <div class="trigger-words-box">
+                                            <strong>كلمات التشغيل:</strong>
+                                            <% menu.triggerWords.split(',').forEach(w => { %>
+                                                <span class="trigger-badge"><%= w.trim() %></span>
+                                            <% }) %>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex gap-2">
+                                        <% if (!menu.isDefault) { %>
+                                            <form action="/dashboard/menus/set-default" method="POST" class="m-0">
+                                                <input type="hidden" name="id" value="<%= menu.id %>">
+                                                <button type="submit" class="btn btn-sm btn-outline-warning rounded px-2" title="تعيين كقائمة رئيسية">
+                                                    <i class="bi bi-star"></i>
+                                                </button>
+                                            </form>
+                                        <% } %>
+                                        <button class="btn btn-sm btn-outline-info rounded px-2"
+                                            onclick="editMenu('<%= menu.id %>', '<%= encodeURIComponent(menu.menuName) %>', '<%= encodeURIComponent(menu.triggerWords) %>', '<%= encodeURIComponent(menu.welcomeMessage || '') %>')" title="تعديل القائمة">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                        <form action="/dashboard/menus/delete" method="POST" class="m-0" onsubmit="return confirm('حذف القائمة سيؤدي لحذف كل الأزرار بداخلها! متأكد؟')">
+                                            <input type="hidden" name="id" value="<%= menu.id %>">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger rounded px-2" title="حذف القائمة">
+                                                <i class="bi bi-trash3"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+
+                                <!-- Add Button to this menu -->
+                                <div class="mb-3">
+                                    <button class="btn btn-sm btn-outline-success rounded-pill" onclick="openAddButtonModal('<%= menu.id %>')">
+                                        <i class="bi bi-plus-circle me-1"></i> إضافة زرار لهذه القائمة
+                                    </button>
+                                </div>
+
+                                <!-- Buttons List -->
+                                <div class="row">
+                                    <% if(menu.InteractiveButtons && menu.InteractiveButtons.length > 0) { %>
+                                        <% menu.InteractiveButtons.forEach((btn, idx) => { %>
+                                            <div class="col-md-6">
+                                                <div class="btn-card <%= btn.isActive ? '' : 'inactive' %>">
+                                                    <span class="btn-order-badge">#<%= idx + 1 %></span>
+                                                    <div class="d-flex justify-content-between align-items-start">
+                                                        <div class="flex-grow-1">
+                                                            <div class="btn-label"><%= btn.label %></div>
+                                                            <div class="btn-response-preview"><%= btn.responseText %></div>
+                                                            <div class="btn-meta">
+                                                                <span class="btn-meta-tag tag-platform-<%= btn.platform %>">
+                                                                    <% if (btn.platform === 'both') { %>📱 واتساب + ماسنجر
+                                                                    <% } else if (btn.platform === 'whatsapp') { %>📱 واتساب فقط
+                                                                    <% } else { %>💬 ماسنجر فقط<% } %>
+                                                                </span>
+                                                                <% if (btn.NextMenuId) { %>
+                                                                    <span class="btn-meta-tag tag-ai-no">🔀 يفتح قائمة أخرى</span>
+                                                                <% } else if (btn.continueToAI) { %>
+                                                                    <span class="btn-meta-tag tag-ai-yes">🤖 يكمل AI</span>
+                                                                <% } else { %>
+                                                                    <span class="btn-meta-tag tag-ai-no">🔄 يرجع لنفس القائمة</span>
+                                                                <% } %>
+                                                            </div>
+                                                        </div>
+                                                        <div class="d-flex flex-column gap-2 align-items-end ms-2">
+                                                            <form action="/dashboard/buttons/toggle/<%= btn.id %>" method="POST" class="m-0">
+                                                                <div class="form-check form-switch m-0" style="padding-left: 0;">
+                                                                    <input class="form-check-input m-0" type="checkbox" onchange="this.form.submit()" <%= btn.isActive ? 'checked' : '' %> style="cursor: pointer; width: 2.2em; height: 1.1em;">
+                                                                </div>
+                                                            </form>
+                                                            <div class="d-flex gap-1">
+                                                                <button class="btn btn-sm btn-outline-info rounded px-2"
+                                                                    onclick="editButton(this)"
+                                                                    data-id="<%= btn.id %>"
+                                                                    data-label="<%= encodeURIComponent(btn.label || '') %>"
+                                                                    data-response="<%= encodeURIComponent(btn.responseText || '') %>"
+                                                                    data-image="<%= encodeURIComponent(btn.responseImage || '') %>"
+                                                                    data-platform="<%= btn.platform %>"
+                                                                    data-continue="<%= btn.continueToAI %>"
+                                                                    data-nextmenu="<%= btn.NextMenuId || '' %>"
+                                                                    data-product="<%= btn.ProductId || '' %>"
+                                                                    data-order="<%= btn.order %>"
+                                                                    title="تعديل">
+                                                                    <i class="bi bi-pencil-square"></i>
+                                                                </button>
+                                                                <form action="/dashboard/buttons/delete" method="POST" class="m-0" onsubmit="return confirm('هل أنت متأكد من حذف هذا الزرار؟')">
+                                                                    <input type="hidden" name="id" value="<%= btn.id %>">
+                                                                    <button type="submit" class="btn btn-sm btn-outline-danger rounded px-2" title="حذف">
+                                                                        <i class="bi bi-trash3"></i>
+                                                                    </button>
+                                                                </form>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        <% }) %>
+                                    <% } else { %>
+                                        <div class="col-12 text-center text-white-50 small py-2">لا توجد أزرار في هذه القائمة بعد.</div>
+                                    <% } %>
+                                </div>
+                            </div>
+                        <% }) %>
+                    <% } %>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Menu Modal -->
+    <div class="modal fade" id="addMenuModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content glass-card">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title text-white fw-bold">📁 إنشاء قائمة جديدة</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="/dashboard/menus/add" method="POST">
+                    <div class="modal-body p-4">
+                        <div class="mb-3">
+                            <label class="form-label text-white fw-bold">اسم القائمة</label>
+                            <input type="text" name="menuName" class="form-control bg-dark text-white border-secondary" required placeholder="مثال: قائمة المبيعات">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-white fw-bold">كلمات التشغيل</label>
+                            <input type="text" name="triggerWords" class="form-control bg-dark text-white border-secondary" required placeholder="اسعار, عروض, بكام">
+                            <div class="form-text text-white-50">افصل بين الكلمات بفاصلة (,)</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-white fw-bold">رسالة الترحيب</label>
+                            <input type="text" name="welcomeMessage" class="form-control bg-dark text-white border-secondary" placeholder="أهلاً بيك! اختار من الاختيارات دي:">
+                        </div>
+                    </div>
+                    <div class="modal-footer border-secondary">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                        <button type="submit" class="btn btn-primary">حفظ القائمة</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Menu Modal -->
+    <div class="modal fade" id="editMenuModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content glass-card">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title text-white fw-bold">✏️ تعديل القائمة</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="/dashboard/menus/edit" method="POST">
+                    <input type="hidden" name="id" id="editMenuId">
+                    <div class="modal-body p-4">
+                        <div class="mb-3">
+                            <label class="form-label text-white fw-bold">اسم القائمة</label>
+                            <input type="text" name="menuName" id="editMenuName" class="form-control bg-dark text-white border-secondary" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-white fw-bold">كلمات التشغيل</label>
+                            <input type="text" name="triggerWords" id="editMenuTriggerWords" class="form-control bg-dark text-white border-secondary" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-white fw-bold">رسالة الترحيب</label>
+                            <input type="text" name="welcomeMessage" id="editMenuWelcomeMessage" class="form-control bg-dark text-white border-secondary">
+                        </div>
+                    </div>
+                    <div class="modal-footer border-secondary">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                        <button type="submit" class="btn btn-primary">حفظ التعديلات</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Button Modal -->
+    <div class="modal fade" id="addBtnModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content glass-card">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title text-white fw-bold">🔘 إضافة زرار جديد</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="/dashboard/buttons/add" method="POST" enctype="multipart/form-data">
+                    <input type="hidden" name="MenuId" id="addBtnMenuId">
+                    <div class="modal-body p-4">
+                        <div class="mb-4">
+                            <label class="form-label text-white fw-bold">اسم الزرار <span class="text-danger">*</span></label>
+                            <input type="text" name="label" class="form-control form-control-lg bg-dark text-white border-secondary" required maxlength="20">
+                            <div class="form-text text-white-50">حد أقصى 20 حرف</div>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label text-white fw-bold">الرد <span class="text-danger">*</span></label>
+                            <textarea name="responseText" class="form-control bg-dark text-white border-secondary" required style="min-height: 120px;"></textarea>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label text-white fw-bold">صورة مرفقة (اختياري)</label>
+                            <input type="file" name="responseImageFile" class="form-control bg-dark text-white border-secondary" accept="image/*">
+                            <input type="hidden" name="responseImage" id="addResponseImage">
+                        </div>
+                        <div class="row mb-4">
+                            <div class="col-md-6 mb-3 mb-md-0">
+                                <label class="form-label text-white fw-bold">المنصة</label>
+                                <select name="platform" class="form-select bg-dark text-white border-secondary">
+                                    <option value="both">📱 واتساب + ماسنجر</option>
+                                    <option value="whatsapp">📱 واتساب فقط</option>
+                                    <option value="messenger">💬 ماسنجر فقط</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label text-white fw-bold">الإجراء بعد الضغط</label>
+                                <select id="addBtnAction" class="form-select bg-dark text-white border-secondary" onchange="toggleAddNextMenu()">
+                                    <option value="same">🔄 يرجع يعرض نفس القائمة تاني</option>
+                                    <option value="ai">🤖 يترك الذكاء الاصطناعي يكمل</option>
+                                    <option value="next">🔀 يفتح قائمة تانية</option>
+                                </select>
+                                <!-- Hidden fields to map UI to DB -->
+                                <input type="hidden" name="continueToAI" id="addContinueToAI" value="false">
+                            </div>
+                        </div>
+                        <div class="mb-4" id="addNextMenuDiv" style="display: none;">
+                            <label class="form-label text-white fw-bold">القائمة التالية <span class="text-danger">*</span></label>
+                            <select name="NextMenuId" id="addNextMenuId" class="form-select bg-dark text-white border-secondary">
+                                <option value="">-- اختر القائمة --</option>
+                                <% menus.forEach(m => { %>
+                                    <option value="<%= m.id %>"><%= m.menuName %></option>
+                                <% }) %>
+                            </select>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label text-white fw-bold">ربط بمنتج / خدمة (اختياري)</label>
+                            <select name="ProductId" class="form-select bg-dark text-white border-secondary">
+                                <option value="">-- بدون ربط --</option>
+                                <% if (products && products.length > 0) { %>
+                                    <% products.forEach(p => { %>
+                                        <option value="<%= p.id %>"><%= p.name %> - <%= p.price ? p.price + ' ' + p.currency : 'سعر غير محدد' %></option>
+                                    <% }) %>
+                                <% } %>
+                            </select>
+                            <div class="form-text text-white-50">لو اخترت منتج، البوت هيبعت بيانات المنتج مع الرد.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-white fw-bold">ترتيب الظهور</label>
+                            <input type="number" name="order" class="form-control bg-dark text-white border-secondary" value="0" min="0">
+                        </div>
+                    </div>
+                    <div class="modal-footer border-secondary">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                        <button type="submit" class="btn btn-primary px-5">حفظ الزرار</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Button Modal -->
+    <div class="modal fade" id="editBtnModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content glass-card">
+                <div class="modal-header border-secondary">
+                    <h5 class="modal-title text-white fw-bold">✏️ تعديل الزرار</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="/dashboard/buttons/edit" method="POST" enctype="multipart/form-data">
+                    <input type="hidden" name="id" id="editBtnId">
+                    <div class="modal-body p-4">
+                        <div class="mb-4">
+                            <label class="form-label text-white fw-bold">اسم الزرار <span class="text-danger">*</span></label>
+                            <input type="text" name="label" id="editLabel" class="form-control form-control-lg bg-dark text-white border-secondary" required maxlength="20">
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label text-white fw-bold">الرد <span class="text-danger">*</span></label>
+                            <textarea name="responseText" id="editResponse" class="form-control bg-dark text-white border-secondary" required style="min-height: 120px;"></textarea>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label text-white fw-bold">صورة مرفقة (اختياري)</label>
+                            <div id="editImagePreview" class="mb-2" style="display:none;">
+                                <img src="" alt="صورة الزرار" class="img-thumbnail" style="max-height: 100px;">
+                                <button type="button" class="btn btn-sm btn-outline-danger ms-2" onclick="document.getElementById('editImage').value = ''; document.getElementById('editImagePreview').style.display = 'none';"><i class="bi bi-trash"></i> حذف الصورة الحالية</button>
+                            </div>
+                            <input type="file" name="responseImageFile" class="form-control bg-dark text-white border-secondary" accept="image/*">
+                            <input type="hidden" name="responseImage" id="editImage">
+                        </div>
+                        <div class="row mb-4">
+                            <div class="col-md-6 mb-3 mb-md-0">
+                                <label class="form-label text-white fw-bold">المنصة</label>
+                                <select name="platform" id="editPlatform" class="form-select bg-dark text-white border-secondary">
+                                    <option value="both">📱 واتساب + ماسنجر</option>
+                                    <option value="whatsapp">📱 واتساب فقط</option>
+                                    <option value="messenger">💬 ماسنجر فقط</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label text-white fw-bold">الإجراء بعد الضغط</label>
+                                <select id="editBtnAction" class="form-select bg-dark text-white border-secondary" onchange="toggleEditNextMenu()">
+                                    <option value="same">🔄 يرجع يعرض نفس القائمة تاني</option>
+                                    <option value="ai">🤖 يترك الذكاء الاصطناعي يكمل</option>
+                                    <option value="next">🔀 يفتح قائمة تانية</option>
+                                </select>
+                                <input type="hidden" name="continueToAI" id="editContinueToAI">
+                            </div>
+                        </div>
+                        <div class="mb-4" id="editNextMenuDiv" style="display: none;">
+                            <label class="form-label text-white fw-bold">القائمة التالية <span class="text-danger">*</span></label>
+                            <select name="NextMenuId" id="editNextMenuId" class="form-select bg-dark text-white border-secondary">
+                                <option value="">-- اختر القائمة --</option>
+                                <% menus.forEach(m => { %>
+                                    <option value="<%= m.id %>"><%= m.menuName %></option>
+                                <% }) %>
+                            </select>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label text-white fw-bold">ربط بمنتج / خدمة (اختياري)</label>
+                            <select name="ProductId" id="editProductId" class="form-select bg-dark text-white border-secondary">
+                                <option value="">-- بدون ربط --</option>
+                                <% if (products && products.length > 0) { %>
+                                    <% products.forEach(p => { %>
+                                        <option value="<%= p.id %>"><%= p.name %> - <%= p.price ? p.price + ' ' + p.currency : 'سعر غير محدد' %></option>
+                                    <% }) %>
+                                <% } %>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-white fw-bold">ترتيب الظهور</label>
+                            <input type="number" name="order" id="editOrder" class="form-control bg-dark text-white border-secondary" min="0">
+                        </div>
+                    </div>
+                    <div class="modal-footer border-secondary">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                        <button type="submit" class="btn btn-primary px-5">حفظ التعديلات</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function editMenu(id, name, triggerWords, welcomeMessage) {
+            document.getElementById('editMenuId').value = id;
+            document.getElementById('editMenuName').value = decodeURIComponent(name);
+            document.getElementById('editMenuTriggerWords').value = decodeURIComponent(triggerWords);
+            document.getElementById('editMenuWelcomeMessage').value = decodeURIComponent(welcomeMessage);
+            new bootstrap.Modal(document.getElementById('editMenuModal')).show();
+        }
+
+        function openAddButtonModal(menuId) {
+            document.getElementById('addBtnMenuId').value = menuId;
+            new bootstrap.Modal(document.getElementById('addBtnModal')).show();
+        }
+
+        function editButton(el) {
+            document.getElementById('editBtnId').value = el.dataset.id;
+            document.getElementById('editLabel').value = decodeURIComponent(el.dataset.label);
+            document.getElementById('editResponse').value = decodeURIComponent(el.dataset.response);
+            
+            const imagePath = decodeURIComponent(el.dataset.image);
+            document.getElementById('editImage').value = imagePath;
+            if (imagePath && imagePath !== 'null' && imagePath !== '') {
+                document.getElementById('editImagePreview').style.display = 'block';
+                document.getElementById('editImagePreview').querySelector('img').src = imagePath;
+            } else {
+                document.getElementById('editImagePreview').style.display = 'none';
+            }
+
+            document.getElementById('editPlatform').value = el.dataset.platform;
+            document.getElementById('editProductId').value = el.dataset.product || '';
+            
+            const continueToAI = el.dataset.continue === 'true';
+            const nextMenuId = el.dataset.nextmenu;
+            
+            if (nextMenuId) {
+                document.getElementById('editBtnAction').value = 'next';
+                document.getElementById('editNextMenuId').value = nextMenuId;
+                document.getElementById('editContinueToAI').value = 'false';
+                document.getElementById('editNextMenuDiv').style.display = 'block';
+            } else if (continueToAI) {
+                document.getElementById('editBtnAction').value = 'ai';
+                document.getElementById('editContinueToAI').value = 'true';
+                document.getElementById('editNextMenuDiv').style.display = 'none';
+                document.getElementById('editNextMenuId').value = '';
+            } else {
+                document.getElementById('editBtnAction').value = 'same';
+                document.getElementById('editContinueToAI').value = 'false';
+                document.getElementById('editNextMenuDiv').style.display = 'none';
+                document.getElementById('editNextMenuId').value = '';
+            }
+
+            document.getElementById('editOrder').value = el.dataset.order;
+            new bootstrap.Modal(document.getElementById('editBtnModal')).show();
+        }
+
+        function toggleAddNextMenu() {
+            const action = document.getElementById('addBtnAction').value;
+            if (action === 'next') {
+                document.getElementById('addNextMenuDiv').style.display = 'block';
+                document.getElementById('addContinueToAI').value = 'false';
+                document.getElementById('addNextMenuId').required = true;
+            } else {
+                document.getElementById('addNextMenuDiv').style.display = 'none';
+                document.getElementById('addNextMenuId').required = false;
+                document.getElementById('addNextMenuId').value = '';
+                document.getElementById('addContinueToAI').value = action === 'ai' ? 'true' : 'false';
+            }
+        }
+
+        function toggleEditNextMenu() {
+            const action = document.getElementById('editBtnAction').value;
+            if (action === 'next') {
+                document.getElementById('editNextMenuDiv').style.display = 'block';
+                document.getElementById('editContinueToAI').value = 'false';
+                document.getElementById('editNextMenuId').required = true;
+            } else {
+                document.getElementById('editNextMenuDiv').style.display = 'none';
+                document.getElementById('editNextMenuId').required = false;
+                document.getElementById('editNextMenuId').value = '';
+                document.getElementById('editContinueToAI').value = action === 'ai' ? 'true' : 'false';
+            }
+        }
+
+        // Initialize Add Form on open to sync hidden inputs
+        document.getElementById('addBtnModal').addEventListener('show.bs.modal', toggleAddNextMenu);
+
+        // 🤖 Set Bot Mode
+        async function setBotMode(mode) {
+            try {
+                // visual feedback immediately
+                document.querySelectorAll('.bot-mode-card').forEach(c => {
+                    c.style.borderColor = 'rgba(255,255,255,0.1)';
+                    c.style.background = 'transparent';
+                    const icon = c.querySelector('.bi-check-circle-fill');
+                    if (icon) icon.remove();
+                });
+                
+                const response = await fetch('/dashboard/set-bot-mode', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    window.location.reload();
+                } else {
+                    alert('حدث خطأ أثناء تغيير الوضع');
+                    window.location.reload();
+                }
+            } catch (err) {
+                console.error('Set bot mode error:', err);
+                alert('حدث خطأ أثناء تغيير الوضع');
+                window.location.reload();
+            }
+        }
+    </script>
+</body>
+</html>
