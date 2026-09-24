@@ -19,7 +19,7 @@ import TeachMessage from '../models/TeachMessage.js';
 import { Op, Sequelize } from 'sequelize';
 import { GoogleAuth } from 'google-auth-library';
 import { vertexQueue, executeVertexAI } from '../services/queueService.js';
-import { sendHumanizedMessage } from '../services/whatsappQueueService.js';
+import { sendHumanizedMessage, botSentMessageIds, botSendingJids } from '../services/whatsappQueueService.js';
 
 // V6_STABLE_VERSION
 console.log("✅ [V6_SIGNATURE] botController.js Loaded");
@@ -846,9 +846,16 @@ export const startSession = async (userId, io, phoneNumber = null) => {
         // Ignore Newsletter channels and status broadcasts immediately
         if (rawJid.includes('@newsletter') || rawJid === 'status@broadcast') return;
 
-        // 0. Auto-Handoff on Manual Reply
+        // 0. Auto-Handoff on Manual Reply (Human Employee Intervention)
         if (msg.key.fromMe) {
             const remoteJid = msg.key.remoteJid;
+            const msgId = msg.key.id;
+
+            // If this message was just sent automatically by the Bot itself, ignore without pausing!
+            if ((msgId && botSentMessageIds.has(msgId)) || (remoteJid && botSendingJids.has(remoteJid))) {
+                return;
+            }
+
             if (remoteJid && !remoteJid.endsWith('@g.us') && remoteJid !== 'status@broadcast') {
                 try {
                     // Try both the original JID and the alt JID (for @lid cases)
@@ -861,7 +868,7 @@ export const startSession = async (userId, io, phoneNumber = null) => {
                         { is_handoff: true },
                         { where: { [Op.or]: whereConditions } }
                     );
-                    console.log(`[Auto-Handoff] Owner replied manually to ${remoteJid}. Bot paused for this chat.`);
+                    console.log(`[Auto-Handoff] 👨‍💼 Human employee replied manually to ${remoteJid}. Bot paused automatically for this chat.`);
                 } catch (e) {
                     console.error("Auto-Handoff Error:", e);
                 }
@@ -2466,8 +2473,8 @@ export async function sendManualMessage(userId, remoteJid, text) {
     const sock = sessions.get(parseInt(userId, 10)) || sessions.get(String(userId));
     if (!sock) throw new Error("البوت غير متصل حالياً.");
     
-    // إرسال الرسالة عبر طابور الحماية المركزي (يكتب الآن + تنويع بصمة النص + منع الإرسال المتزامن)
-    await sendHumanMessage(sock, remoteJid, { text }, { userId });
+    // إرسال الرسالة عبر طابور الحماية المركزي مع تحديد أنها رسالة يدوية من موظف بشري
+    await sendHumanMessage(sock, remoteJid, { text }, { userId, isManual: true });
     
     // حفظ الرسالة
     const savedMsg = await Message.create({
@@ -2477,9 +2484,9 @@ export async function sendManualMessage(userId, remoteJid, text) {
         content: text
     });
     
-    // تحديث المحادثة
+    // تحديث المحادثة وتفعيل الإيقاف التلقائي للبوت (is_handoff: true) لتدخل الموظف البشري
     await Conversation.update(
-        { lastMessageText: text, lastMessageAt: new Date() },
+        { lastMessageText: text, lastMessageAt: new Date(), is_handoff: true },
         { where: { UserId: userId, remoteJid } }
     );
     

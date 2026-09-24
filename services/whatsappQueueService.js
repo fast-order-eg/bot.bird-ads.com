@@ -12,6 +12,8 @@
 
 const userQueues = new Map(); // userId -> { items: [], isProcessing: false }
 const userHourlyMessageCount = new Map(); // userId -> { count, resetTime }
+export const botSentMessageIds = new Set(); // Message IDs sent automatically by the Bot
+export const botSendingJids = new Set(); // JIDs currently receiving an automated Bot message
 
 /**
  * Calculates realistic human typing/recording duration based on message character count.
@@ -193,8 +195,22 @@ async function processUserQueue(queueKey) {
                 }
             }
 
-            // 6. Send the actual message
-            const res = await sock.sendMessage(remoteJid, content);
+            // 6. Send the actual message (Track automated bot messages to avoid false Auto-Handoff)
+            if (!options.isManual && remoteJid) {
+                botSendingJids.add(remoteJid);
+            }
+            let res = null;
+            try {
+                res = await sock.sendMessage(remoteJid, content);
+                if (!options.isManual && res?.key?.id) {
+                    botSentMessageIds.add(res.key.id);
+                    setTimeout(() => botSentMessageIds.delete(res.key.id), 60000);
+                }
+            } finally {
+                if (!options.isManual && remoteJid) {
+                    setTimeout(() => botSendingJids.delete(remoteJid), 3000);
+                }
+            }
 
             // 7. Stop Typing
             if (!options.skipTyping) {
