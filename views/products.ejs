@@ -305,8 +305,11 @@
                         <div class="product-card-body">
                             <div class="product-card-name"><%= product.name %></div>
                             <div class="product-card-desc"><%= product.description || 'بدون وصف' %></div>
-                            <% if (product.price) { %>
-                                <div class="product-card-price"><%= product.price %> <%= product.currency || 'EGP' %></div>
+                            <% if (product.price) {
+                                const formattedPrice = Math.round(Number(product.price)).toLocaleString('en-US');
+                                const displayCurrency = (!product.currency || product.currency === 'EGP' || product.currency === 'ج.م') ? 'جنيه' : product.currency;
+                            %>
+                                <div class="product-card-price">السعر: <%= formattedPrice %> <%= displayCurrency %></div>
                             <% } else { %>
                                 <div class="product-card-price" style="color: #8899ac; font-size: 13px;">بدون سعر</div>
                             <% } %>
@@ -323,8 +326,8 @@
                                 data-name="<%= product.name %>"
                                 data-type="<%= product.type %>"
                                 data-description="<%= product.description || '' %>"
-                                data-price="<%= product.price || '' %>"
-                                data-currency="<%= product.currency || 'EGP' %>"
+                                data-price="<%= product.price ? Math.round(Number(product.price)) : '' %>"
+                                data-currency="<%= (!product.currency || product.currency === 'جنيه') ? 'EGP' : product.currency %>"
                                 data-category="<%= product.category || '' %>"
                                 data-status="<%= product.status %>"
                                 data-images='<%= JSON.stringify(product.images || []) %>'
@@ -395,18 +398,18 @@
                         <div class="row mb-3">
                             <div class="col-8">
                                 <label class="form-label text-white fw-bold">💰 السعر</label>
-                                <input type="number" name="price" id="addPrice" step="0.01" min="0"
+                                <input type="number" name="price" id="addPrice" step="1" min="0"
                                     class="form-control bg-dark text-white border-secondary"
-                                    placeholder="مثال: 250">
+                                    placeholder="مثال: 39000">
                             </div>
                             <div class="col-4">
                                 <label class="form-label text-white fw-bold">العملة</label>
                                 <select name="currency" class="form-select bg-dark text-white border-secondary">
-                                    <option value="EGP" selected>EGP ج.م</option>
-                                    <option value="SAR">SAR ر.س</option>
-                                    <option value="AED">AED د.إ</option>
-                                    <option value="USD">USD $</option>
-                                    <option value="EUR">EUR €</option>
+                                    <option value="جنيه" selected>جنيه</option>
+                                    <option value="ريال">ريال</option>
+                                    <option value="درهم">درهم</option>
+                                    <option value="دولار">دولار</option>
+                                    <option value="يورو">يورو</option>
                                 </select>
                             </div>
                         </div>
@@ -496,17 +499,18 @@
                         <div class="row mb-3">
                             <div class="col-8">
                                 <label class="form-label text-white fw-bold">💰 السعر</label>
-                                <input type="number" name="price" id="editPrice" step="0.01" min="0"
+                                <input type="number" name="price" id="editPrice" step="1" min="0"
                                     class="form-control bg-dark text-white border-secondary">
                             </div>
                             <div class="col-4">
                                 <label class="form-label text-white fw-bold">العملة</label>
                                 <select name="currency" id="editCurrency" class="form-select bg-dark text-white border-secondary">
-                                    <option value="EGP">EGP ج.م</option>
-                                    <option value="SAR">SAR ر.س</option>
-                                    <option value="AED">AED د.إ</option>
-                                    <option value="USD">USD $</option>
-                                    <option value="EUR">EUR €</option>
+                                    <option value="جنيه">جنيه</option>
+                                    <option value="EGP">جنيه</option>
+                                    <option value="ريال">ريال</option>
+                                    <option value="درهم">درهم</option>
+                                    <option value="دولار">دولار</option>
+                                    <option value="يورو">يورو</option>
                                 </select>
                             </div>
                         </div>

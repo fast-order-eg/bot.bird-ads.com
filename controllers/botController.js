@@ -154,6 +154,33 @@ function resolveRemoteJid(msgKey) {
     return jid;
 }
 
+function formatPriceWithComma(price, currency = 'جنيه') {
+    if (price === null || price === undefined || price === '') return '';
+    const cleanNum = Math.round(parseFloat(String(price).replace(/,/g, '')));
+    if (isNaN(cleanNum)) return `${price} ${currency || 'جنيه'}`;
+    const formattedNum = cleanNum.toLocaleString('en-US');
+    let cleanCurrency = String(currency || 'جنيه').trim();
+    if (!cleanCurrency || cleanCurrency.toUpperCase() === 'EGP' || cleanCurrency === 'ج.م') cleanCurrency = 'جنيه';
+    else if (cleanCurrency.toUpperCase() === 'SAR') cleanCurrency = 'ريال';
+    else if (cleanCurrency.toUpperCase() === 'AED') cleanCurrency = 'درهم';
+    else if (cleanCurrency.toUpperCase() === 'USD') cleanCurrency = 'دولار';
+    else if (cleanCurrency.toUpperCase() === 'EUR') cleanCurrency = 'يورو';
+    return `${formattedNum} ${cleanCurrency}`;
+}
+
+function normalizePricesInText(text) {
+    if (!text || typeof text !== 'string') return text;
+    // 1. إزالة القروش (.00) من أي رقم سعر
+    let cleaned = text.replace(/(\d+)\.00\b/g, '$1');
+    // 2. تحويل كلمة EGP أو ج.م إلى جنيه
+    cleaned = cleaned.replace(/\bEGP\b/gi, 'جنيه').replace(/ج\.م/g, 'جنيه');
+    // 3. إضافة فاصلة الألوف (Comma) لأي سعر مكون من 4 إلى 7 أرقام متبوع بكلمة عملة (مثل: 39000 جنيه -> 39,000 جنيه)
+    cleaned = cleaned.replace(/(?<![0-9,])(\d{4,7})(?=\s*(?:جنيه|ريال|درهم|دولار|يورو))/g, (match) => {
+        return parseInt(match, 10).toLocaleString('en-US');
+    });
+    return cleaned;
+}
+
 async function callVertexAI(remoteJid, userText, mediaBuffer = null, mediaMime = null, userId) {
     // 1. Fetch User Instructions from Instructions table
     const user = await User.findByPk(userId);
@@ -225,14 +252,14 @@ async function callVertexAI(remoteJid, userText, mediaBuffer = null, mediaMime =
             allProducts.forEach(prod => {
                 const typeName = prod.type === 'product' ? 'منتج' : 'خدمة';
                 systemInstruction += `- ID: ${prod.id} | النوع: ${typeName} | الاسم: "${prod.name}"`;
-                if (prod.price) systemInstruction += ` | السعر: ${prod.price} ${prod.currency}`;
+                if (prod.price) systemInstruction += ` | السعر: ${formatPriceWithComma(prod.price, prod.currency)}`;
                 if (prod.description) systemInstruction += ` | الوصف: ${prod.description.substring(0, 100)}`;
                 systemInstruction += `\n`;
             });
 
             systemInstruction += '\n💡 **تعليمات هامة جداً للرد (تنسيق JSON):**\n';
             systemInstruction += '1. **يجب** أن يكون ردك دائماً بتنسيق JSON صحيح وحصرياً.\n';
-            systemInstruction += '2. الحقل "text": ضع فيه ردك النصي الطبيعي للعميل.\n';
+            systemInstruction += '2. الحقل "text": ضع فيه ردك النصي الطبيعي للعميل (اكتب الأسعار دائماً كرقم صحيح بفواصل الألوف متبوعاً بكلمة "جنيه" مثل: 39,000 جنيه، بدون أي قروش .00 وبدون كلمة EGP).\n';
             systemInstruction += '3. الحقل "show_products": إذا طلب العميل رؤية صور أو تفاصيل لمنتجات/خدمات معينة من القائمة أعلاه، ضع أرقام الـ ID الخاصة بهذه المنتجات في مصفوفة (مثال: [1, 5]).\n';
             systemInstruction += '4. إذا لم يطلب العميل عرض منتجات معينة، أو كان مجرد سؤال عام، اجعل "show_products" مصفوفة فارغة [].\n';
             systemInstruction += '5. 🛑 **قاعدة إرسال الصور (show_products):** إذا نصت التعليمات أعلاه على إرسال صورة/بروشور معين في خطوة محددة (مثل جدول البري، أو جدول الطيران، أو جدول التقسيط، أو شروط التقسيط)، أو إذا طلب العميل رؤية الصور أو اختار برنامجاً، **يجب وضع أرقام الـ ID الخاصة بهذه البرامج/البروشورات فوراً في مصفوفة "show_products"** ليتم إرسال الصور للعميل تلقائياً مع ردك النصي.\n';
@@ -466,6 +493,7 @@ async function handleOrderCompletion(sock, customerJid, lastMessage, aiResponse,
         groupMsg += `🔢 رقم الطلب: ${orderNum}\n\n`;
         groupMsg += `📝 *التفاصيل والملخص:*\n${orderSummary}\n\n`;
         groupMsg += `─────────────────\n💬 *رد البوت النهائي للعميل:*\n${aiResponse}`;
+        groupMsg = normalizePricesInText(groupMsg);
 
         // 7. Search for group by name or fallback to user.control_group_jid
         const userObj = await User.findByPk(userId);
@@ -601,7 +629,7 @@ async function handleButtonResponse(sock, remoteJid, buttonId, userId, io) {
         if (button.ProductId) {
             const product = await Product.findOne({ where: { id: button.ProductId, UserId: userId, isActive: true } });
             if (product) {
-                const productCaption = `📦 *${product.name}*\n\n${product.description || ''}\n\nالسعر: ${product.price ? product.price + ' ' + product.currency : 'تواصل معنا لمعرفة السعر'}`;
+                const productCaption = `📦 *${product.name}*\n\n${product.description || ''}\n\nالسعر: ${product.price ? formatPriceWithComma(product.price, product.currency) : 'تواصل معنا لمعرفة السعر'}`;
                 
                 let sentCaption = false;
                 if (product.images && product.images.length > 0) {
@@ -1466,6 +1494,8 @@ export const startSession = async (userId, io, phoneNumber = null) => {
                 return `${cleanText}: ${cleanUrl}`;
             });
 
+            replyText = normalizePricesInText(replyText);
+
             await sendHumanMessage(sock, remoteJid, { text: replyText }, { userId, readMessageKey: msg.key });
 
             const savedResponse = await Message.create({
@@ -1495,8 +1525,8 @@ export const startSession = async (userId, io, phoneNumber = null) => {
                                 const imagePath = path.join(process.cwd(), 'public', images[0].url);
                                 if (fs.existsSync(imagePath)) {
                                     let caption = `*${prod.name}*`;
-                                    if (prod.price) caption += `\nالسعر: ${prod.price} ${prod.currency}`;
-                                    if (prod.description) caption += `\n\n${prod.description}`;
+                                    if (prod.price) caption += `\nالسعر: ${formatPriceWithComma(prod.price, prod.currency)}`;
+                                    if (prod.description) caption += `\n\n${normalizePricesInText(prod.description)}`;
                                     
                                     await sendHumanMessage(sock, remoteJid, {
                                         image: { url: imagePath },
@@ -1520,8 +1550,8 @@ export const startSession = async (userId, io, phoneNumber = null) => {
                             } else {
                                 // No images, just send text
                                 let textMsg = `*${prod.name}*`;
-                                if (prod.price) textMsg += `\nالسعر: ${prod.price} ${prod.currency}`;
-                                if (prod.description) textMsg += `\n\n${prod.description}`;
+                                if (prod.price) textMsg += `\nالسعر: ${formatPriceWithComma(prod.price, prod.currency)}`;
+                                if (prod.description) textMsg += `\n\n${normalizePricesInText(prod.description)}`;
                                 await sendHumanMessage(sock, remoteJid, { text: textMsg }, { userId });
                                 console.log(`   ✅ Sent Product Text: ${prod.name}`);
                             }
@@ -1911,7 +1941,7 @@ export const checkInactivitySummary = async () => {
 
                 const customerDisplay = conv.customerName || conv.phoneNumber || conv.remoteJid.split('@')[0];
                 const phoneDisplay = conv.phoneNumber || conv.remoteJid.split('@')[0];
-                const summaryMsg = `📋 *ملخص محادثة منتهية (لا رد منذ 15 دقيقة)*\n\n👤 العميل: ${customerDisplay}\n📱 الرقم: ${phoneDisplay}\n📱 المنصة: واتساب\n🕐 آخر رسالة: ${conv.lastMessageAt?.toLocaleTimeString('ar-EG') || '-'}\n\n─────────────────\n${chatLog}\n─────────────────\n\nيرجى المتابعة مع العميل إذا لزم الأمر.`;
+                const summaryMsg = normalizePricesInText(`📋 *ملخص محادثة منتهية (لا رد منذ 15 دقيقة)*\n\n👤 العميل: ${customerDisplay}\n📱 الرقم: ${phoneDisplay}\n📱 المنصة: واتساب\n🕐 آخر رسالة: ${conv.lastMessageAt?.toLocaleTimeString('ar-EG') || '-'}\n\n─────────────────\n${chatLog}\n─────────────────\n\nيرجى المتابعة مع العميل إذا لزم الأمر.`);
 
                 await sendHumanMessage(sock, user.control_group_jid, { text: summaryMsg }, { userId: user.id });
                 console.log(`[InactivitySummary] Sent summary for ${conv.remoteJid} (User: ${user.id})`);
@@ -2068,7 +2098,7 @@ export async function simulateChat(userId, userText) {
         allProducts.forEach(prod => {
             const typeName = prod.type === 'product' ? 'منتج' : 'خدمة';
             systemInstruction += `- ID: ${prod.id} | النوع: ${typeName} | الاسم: "${prod.name}"`;
-            if (prod.price) systemInstruction += ` | السعر: ${prod.price} ${prod.currency}`;
+            if (prod.price) systemInstruction += ` | السعر: ${formatPriceWithComma(prod.price, prod.currency)}`;
             if (prod.description) systemInstruction += ` | الوصف: ${prod.description.substring(0, 100)}`;
             systemInstruction += `\n`;
         });
@@ -2076,7 +2106,7 @@ export async function simulateChat(userId, userText) {
 
     systemInstruction += '\n\n💡 **تعليمات هامة جداً للرد (تنسيق JSON):**\n';
     systemInstruction += '1. **يجب** أن يكون ردك دائماً بتنسيق JSON صحيح وحصرياً. ممنوع كتابة أي مقدمات مثل "ستكون إجابتي كالتالي" قبل الـ JSON.\n';
-    systemInstruction += '2. الحقل "text": ضع فيه ردك النصي الطبيعي للعميل.\n';
+    systemInstruction += '2. الحقل "text": ضع فيه ردك النصي الطبيعي للعميل (اكتب الأسعار دائماً كرقم صحيح بفواصل الألوف متبوعاً بكلمة "جنيه" مثل: 39,000 جنيه، بدون قروش .00 وبدون كلمة EGP).\n';
     systemInstruction += '3. الحقل "show_products": مصفوفة (Array) تحتوي على أرقام الـ ID للمنتجات أو الخدمات فقط في حال طلب العميل رؤية صور أو تفاصيل إضافية. إذا لم يطلب منتجات محددة اجعلها مصفوفة فارغة [].\n';
     if (allProducts.length > 0) {
         systemInstruction += '4. 🛑 **قاعدة إرسال الصور (show_products):** إذا نصت التعليمات أعلاه على إرسال صورة/بروشور معين في خطوة محددة (مثل جدول البري، أو جدول الطيران، أو جدول التقسيط، أو شروط التقسيط)، أو إذا طلب العميل رؤية الصور أو اختار برنامجاً، **يجب وضع أرقام الـ ID الخاصة بهذه البرامج/البروشورات فوراً في مصفوفة "show_products"** ليتم إرسال الصور للعميل تلقائياً مع ردك النصي.\n';
@@ -2123,7 +2153,7 @@ export async function simulateChat(userId, userText) {
             if (rawReply) parsedReply.text = rawReply;
         }
 
-        let reply = parsedReply.text;
+        let reply = normalizePricesInText(parsedReply.text);
 
         if (parsedReply.show_products && parsedReply.show_products.length > 0) {
             const requestedProducts = await Product.findAll({

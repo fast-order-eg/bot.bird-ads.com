@@ -27,12 +27,27 @@ const Product = sequelize.define('Product', {
     price: {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: true,
-        comment: 'السعر'
+        comment: 'السعر',
+        get() {
+            const raw = this.getDataValue('price');
+            if (raw === null || raw === undefined || raw === '') return null;
+            const num = Math.round(parseFloat(raw));
+            return isNaN(num) ? null : num;
+        }
     },
     currency: {
         type: DataTypes.STRING(10),
-        defaultValue: 'EGP',
-        comment: 'العملة'
+        defaultValue: 'جنيه',
+        comment: 'العملة',
+        get() {
+            const raw = this.getDataValue('currency');
+            if (!raw || raw.toUpperCase() === 'EGP' || raw === 'ج.م') return 'جنيه';
+            if (raw.toUpperCase() === 'SAR') return 'ريال';
+            if (raw.toUpperCase() === 'AED') return 'درهم';
+            if (raw.toUpperCase() === 'USD') return 'دولار';
+            if (raw.toUpperCase() === 'EUR') return 'يورو';
+            return raw;
+        }
     },
     category: {
         type: DataTypes.STRING,
