@@ -155,7 +155,19 @@ body.modal-open {
     }
 
     .glass-card {
-        padding: 2rem !important;
+        padding: 1.15rem 0.85rem !important;
+        border-radius: 14px;
+    }
+}
+
+@media (min-width: 768px) {
+    .nav-bot-logo {
+        width: 46px !important;
+        height: 46px !important;
+    }
+    .nav-bot-title {
+        max-width: 320px !important;
+        font-size: 1.2rem !important;
     }
 }
 
@@ -532,10 +544,12 @@ body.modal-open {
 
 @media (max-width: 992px) {
     .main-content {
-        margin-right: 0;
-        width: 100%;
-        padding-top: 80px;
-        padding-bottom: 30px;
+        margin-right: 0 !important;
+        width: 100% !important;
+        padding-top: 72px !important;
+        padding-bottom: 24px !important;
+        padding-left: 10px !important;
+        padding-right: 10px !important;
     }
 }
 
