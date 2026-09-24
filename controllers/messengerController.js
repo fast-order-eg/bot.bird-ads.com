@@ -425,9 +425,7 @@ async function callVertexAIForMessenger(userId, senderId, userText, conversation
 
         const prompt = `${systemInstructions}\n\nسياق المحادثة السابقة:\n${historyText}\n\nالعميل: ${userText}\nالمساعد:`;
 
-        // Vertex AI URL (uses Service Account authentication)
-        const location = 'us-central1';
-        const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${CONFIG.PROJECT_ID}/locations/${location}/publishers/google/models/${CONFIG.MODEL_NAME}:generateContent`;
+        const url = CONFIG.getVertexUrl ? CONFIG.getVertexUrl() : `https://aiplatform.googleapis.com/v1/projects/${CONFIG.PROJECT_ID}/locations/global/publishers/google/models/${CONFIG.MODEL_NAME}:generateContent`;
 
         const payload = {
             contents: [{ role: "user", parts: [{ text: prompt }] }],
@@ -555,11 +553,9 @@ export async function generateConversationSummary(userId, conversationId) {
             `${msg.role === 'user' ? 'العميل' : 'البوت'}: ${msg.content}`
         ).join('\n');
 
-        const location = 'us-central1';
-        const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${CONFIG.PROJECT_ID}/locations/${location}/publishers/google/models/${CONFIG.MODEL_NAME}:generateContent`;
-
+        const url = CONFIG.getVertexUrl ? CONFIG.getVertexUrl() : `https://aiplatform.googleapis.com/v1/projects/${CONFIG.PROJECT_ID}/locations/global/publishers/google/models/${CONFIG.MODEL_NAME}:generateContent`;
         const auth = new GoogleAuth({
-            keyFilename: CONFIG.GOOGLE_CREDENTIALS || process.env.GOOGLE_APPLICATION_CREDENTIALS || 'trim-bot-486500-h8-4b614b18f7c0.json',
+            keyFilename: CONFIG.GOOGLE_CREDENTIALS || process.env.GOOGLE_APPLICATION_CREDENTIALS || 'fast-order-505012-2adde4c0badf.json',
             scopes: ['https://www.googleapis.com/auth/cloud-platform']
         });
 

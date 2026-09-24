@@ -79,9 +79,9 @@ export const vertexQueue = new VertexQueue();
  * It attempts the primary model (CONFIG.MODEL_NAME or gemini-2.5-flash) first.
  * If that fails or encounters congestion/delay, it automatically switches to the fallback model (CONFIG.FALLBACK_MODEL_NAME or gemini-2.5-flash-lite).
  */
-export async function executeVertexAI(payload, location = 'us-central1') {
+export async function executeVertexAI(payload, location = null) {
     if (process.env.GOOGLE_APPLICATION_CREDENTIALS && !fs.existsSync(process.env.GOOGLE_APPLICATION_CREDENTIALS)) {
-        const fallback = 'project-c1442437-41e2-480c-86d-0935778ac612.json';
+        const fallback = 'fast-order-505012-2adde4c0badf.json';
         if (fs.existsSync(fallback)) {
             process.env.GOOGLE_APPLICATION_CREDENTIALS = fallback;
         } else {
@@ -90,7 +90,7 @@ export async function executeVertexAI(payload, location = 'us-central1') {
     }
 
     const auth = new GoogleAuth({
-        keyFilename: CONFIG.GOOGLE_CREDENTIALS || process.env.GOOGLE_APPLICATION_CREDENTIALS || 'project-c1442437-41e2-480c-86d-0935778ac612.json',
+        keyFilename: CONFIG.GOOGLE_CREDENTIALS || process.env.GOOGLE_APPLICATION_CREDENTIALS || 'fast-order-505012-2adde4c0badf.json',
         scopes: ['https://www.googleapis.com/auth/cloud-platform']
     });
 
@@ -98,12 +98,21 @@ export async function executeVertexAI(payload, location = 'us-central1') {
     const accessToken = await client.getAccessToken();
     const tokenStr = typeof accessToken === 'string' ? accessToken : (accessToken?.token || '');
 
-    const primaryModel = CONFIG.MODEL_NAME || 'gemini-2.5-flash';
-    const fallbackModel = CONFIG.FALLBACK_MODEL_NAME || 'gemini-2.5-flash-lite';
-    const projectId = CONFIG.PROJECT_ID || 'project-c1442437-41e2-480c-86d';
+    const primaryModel = CONFIG.MODEL_NAME || 'gemini-3.8-flash';
+    const fallbackModel = CONFIG.FALLBACK_MODEL_NAME || 'gemini-2.5-flash';
+    const projectId = CONFIG.PROJECT_ID || 'fast-order-505012';
+    const loc = location || CONFIG.LOCATION || 'global';
 
-    const primaryUrl = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${primaryModel}:generateContent`;
-    const fallbackUrl = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${fallbackModel}:generateContent`;
+    const getEndpointUrl = (model, l) => {
+        if (CONFIG.getVertexUrl) return CONFIG.getVertexUrl(model, l);
+        if (l === 'global') {
+            return `https://aiplatform.googleapis.com/v1/projects/${projectId}/locations/global/publishers/google/models/${model}:generateContent`;
+        }
+        return `https://${l}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${l}/publishers/google/models/${model}:generateContent`;
+    };
+
+    const primaryUrl = getEndpointUrl(primaryModel, loc);
+    const fallbackUrl = getEndpointUrl(fallbackModel, loc);
 
     const headers = {
         'Content-Type': 'application/json',
@@ -112,7 +121,7 @@ export async function executeVertexAI(payload, location = 'us-central1') {
 
     return await vertexQueue.add(async () => {
         // Helper to perform fetch with timeout
-        const fetchWithTimeout = async (url, options, timeoutMs = 12000) => {
+        const fetchWithTimeout = async (url, options, timeoutMs = 25000) => {
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), timeoutMs);
             try {

@@ -19,6 +19,7 @@ import TeachMessage from '../models/TeachMessage.js';
 import { Op, Sequelize } from 'sequelize';
 import { GoogleAuth } from 'google-auth-library';
 import { vertexQueue, executeVertexAI } from '../services/queueService.js';
+import { sendHumanizedMessage } from '../services/whatsappQueueService.js';
 
 // V6_STABLE_VERSION
 console.log("✅ [V6_SIGNATURE] botController.js Loaded");
@@ -38,72 +39,22 @@ const lidPhoneMap = new Map();
 // ============================================================
 // 🛡️ ANTI-BAN & DYNAMIC SPINTAX SHIELD (Baileys Protection)
 // ============================================================
-const userHourlyMessageCount = new Map(); // userId -> { count, resetTime }
-const contactDebounceMap = new Map();     // userId_remoteJid -> token
+const groupMetadataCache = new Map(); // groupJid -> { data, expiresAt }
+const incomingMessageAggregator = new Map(); // `${userId}_${remoteJid}` -> { texts: [], timer: null, resolve: null }
 
-function calculateHumanDelay(textLength = 50, minSec = 3, maxSec = 7) {
-    let baseDelay = minSec * 1000;
-    if (textLength > 200) {
-        baseDelay = 7000 + Math.floor(Math.random() * 4000); // 7-11 sec
-    } else if (textLength > 80) {
-        baseDelay = 4500 + Math.floor(Math.random() * 3000); // 4.5-7.5 sec
-    } else {
-        baseDelay = 3000 + Math.floor(Math.random() * 2500); // 3-5.5 sec
+async function getCachedGroupMetadata(sock, groupJid) {
+    const cached = groupMetadataCache.get(groupJid);
+    if (cached && Date.now() < cached.expiresAt) {
+        return cached.data;
     }
-    return baseDelay;
+    const data = await sock.groupMetadata(groupJid);
+    groupMetadataCache.set(groupJid, { data, expiresAt: Date.now() + 30 * 60 * 1000 }); // 30 mins cache
+    return data;
 }
 
 async function sendHumanMessage(sock, remoteJid, content, options = {}) {
-    if (!sock) return null;
-    const userId = options.userId;
-
-    // 1. Hourly Rate Limiting per User
-    if (userId) {
-        const now = Date.now();
-        let rateData = userHourlyMessageCount.get(userId) || { count: 0, resetTime: now + 3600000 };
-        if (now > rateData.resetTime) {
-            rateData = { count: 0, resetTime: now + 3600000 };
-        }
-        rateData.count++;
-        userHourlyMessageCount.set(userId, rateData);
-
-        if (rateData.count > 70) {
-            console.warn(`⚠️ [RateLimiter] User ${userId} exceeded 70 msgs/hour (${rateData.count}). Throttling reply.`);
-            await new Promise(r => setTimeout(r, 10000));
-        } else if (rateData.count > 40) {
-            console.log(`⏱️ [RateLimiter] User ${userId} sent ${rateData.count} msgs/hour. Slowing down reply.`);
-            await new Promise(r => setTimeout(r, 5000));
-        }
-    }
-
-    let textLength = 50;
-    if (typeof content === 'object' && content !== null) {
-        textLength = (content.text || content.caption || '').length || 50;
-    } else if (typeof content === 'string') {
-        textLength = content.length;
-        content = { text: content };
-    }
-
-    // 2. Set Available Presence
-    try { await sock.sendPresenceUpdate('available', remoteJid); } catch (e) {}
-
-    // 3. Simulate Composing (Typing Indicator)
-    try { await sock.sendPresenceUpdate('composing', remoteJid); } catch (e) {}
-
-    // 4. Human Delay
-    const delayMs = options.delayMs || calculateHumanDelay(textLength);
-    await new Promise(r => setTimeout(r, delayMs));
-
-    // 5. Send Message
-    const res = await sock.sendMessage(remoteJid, content);
-
-    // 6. Stop Typing & Switch to Unavailable
-    try {
-        await sock.sendPresenceUpdate('paused', remoteJid);
-        await sock.sendPresenceUpdate('unavailable', remoteJid);
-    } catch (e) {}
-
-    return res;
+    if (!sock || !remoteJid) return null;
+    return await sendHumanizedMessage(sock, remoteJid, content, options);
 }
 
 function getDynamicGreeting(customerName, baseWelcome) {
@@ -297,7 +248,8 @@ async function callVertexAI(remoteJid, userText, mediaBuffer = null, mediaMime =
     systemInstruction += '3. إذا سألك العميل سؤالاً فنياً معقداً أو خارج تخصص المتجر أو طلب التحدث لموظف بشري، يجب عليك الرد بكلمة واحدة فقط وهي بالضبط: [HANDOFF]\n';
     systemInstruction += '4. لا تكتب أي كلام آخر مع كلمة [HANDOFF].\n';
 
-    const history = dbMessages.reverse().map(msg => ({
+    const filteredDbMessages = dbMessages.filter((msg, idx) => !(idx === 0 && msg.role === 'user' && msg.content === userText));
+    const history = filteredDbMessages.reverse().map(msg => ({
         role: msg.role,
         parts: [{ text: msg.content }]
     }));
@@ -532,8 +484,8 @@ async function handleOrderCompletion(sock, customerJid, lastMessage, aiResponse,
             return;
         }
 
-        // 8. Send message to group
-        await sock.sendMessage(targetGroupJid, { text: groupMsg });
+        // 8. Send message to group via Anti-Ban Queue
+        await sendHumanMessage(sock, targetGroupJid, { text: groupMsg }, { userId });
         console.log(`✅ Order forwarded to group "${targetGroup}"!`);
 
     } catch (error) {
@@ -719,7 +671,7 @@ export const startSession = async (userId, io, phoneNumber = null) => {
             const sock = sessions.get(userId);
             if (sock.user) {
                 try {
-                    await sock.sendMessage(user.control_group_jid, { text: '✅ تم تشغيل البوت من لوحة التحكم.' });
+                    await sendHumanMessage(sock, user.control_group_jid, { text: '✅ تم تشغيل البوت من لوحة التحكم.' }, { userId });
                 } catch (e) {
                     console.error("Error notifying control group:", e);
                 }
@@ -874,13 +826,6 @@ export const startSession = async (userId, io, phoneNumber = null) => {
         // Ignore Newsletter channels and status broadcasts immediately
         if (rawJid.includes('@newsletter') || rawJid === 'status@broadcast') return;
 
-        // Humanize Read Receipt: Delay slightly before marking read
-        if (rawJid && !rawJid.endsWith('@g.us') && !msg.key.fromMe) {
-            setTimeout(async () => {
-                try { await sock.readMessages([msg.key]); } catch (e) {}
-            }, 1500 + Math.floor(Math.random() * 2000));
-        }
-
         // 0. Auto-Handoff on Manual Reply
         if (msg.key.fromMe) {
             const remoteJid = msg.key.remoteJid;
@@ -1012,6 +957,37 @@ export const startSession = async (userId, io, phoneNumber = null) => {
         }
         // === End Text Menu Parser ===
 
+        // 🛡️ Early Message Aggregation (Smart Batching for AI & Anti-Ban):
+        // If customer sends 2-4 rapid text lines within 3.5 seconds, combine them into ONE message
+        // so Vertex AI receives the full context at once and sends ONE complete reply.
+        if (text && (messageType === 'conversation' || messageType === 'extendedTextMessage') && !remoteJid.endsWith('@g.us')) {
+            const aggKey = `${userId}_${remoteJid}`;
+            let entry = incomingMessageAggregator.get(aggKey);
+            if (entry) {
+                entry.texts.push(text.trim());
+                clearTimeout(entry.timer);
+                entry.timer = setTimeout(() => {
+                    incomingMessageAggregator.delete(aggKey);
+                    entry.resolve(entry.texts.join('\n'));
+                }, 3500);
+                console.log(`📥 [Aggregator] Batched rapid message from ${remoteJid} (${entry.texts.length} parts)`);
+                return;
+            } else {
+                const combinedText = await new Promise((resolve) => {
+                    const newEntry = {
+                        texts: [text.trim()],
+                        resolve,
+                        timer: setTimeout(() => {
+                            incomingMessageAggregator.delete(aggKey);
+                            resolve(newEntry.texts.join('\n'));
+                        }, 3500)
+                    };
+                    incomingMessageAggregator.set(aggKey, newEntry);
+                });
+                text = combinedText;
+            }
+        }
+
         // 1. Save User Message to DB (ALWAYS)
         if (text) {
             const savedMsg = await Message.create({
@@ -1050,8 +1026,8 @@ export const startSession = async (userId, io, phoneNumber = null) => {
         // 2. Check for "Lina Control" or "Abkarino" Group Message (High Priority)
         if (remoteJid.endsWith('@g.us')) {
             try {
-                // Fetch group metadata to check name
-                const groupMetadata = await sock.groupMetadata(remoteJid);
+                // Fetch group metadata (Cached for 30 mins to prevent rate-limiting)
+                const groupMetadata = await getCachedGroupMetadata(sock, remoteJid);
 
                 // Check for "Lina" Group (Control Center)
                 if (groupMetadata.subject && (groupMetadata.subject.includes("لينا") || groupMetadata.subject.toLowerCase().includes("lina"))) {
@@ -1075,7 +1051,7 @@ export const startSession = async (userId, io, phoneNumber = null) => {
                         user.pause_until = null;
                         user.control_group_jid = remoteJid;
                         await user.save();
-                        await sock.sendMessage(remoteJid, { text: '✅ تم إيقاف البوت عن الرد تلقائياً على جميع المحادثات.' });
+                        await sendHumanMessage(sock, remoteJid, { text: '✅ تم إيقاف البوت عن الرد تلقائياً على جميع المحادثات.' }, { userId });
                         return;
                     }
 
@@ -1085,7 +1061,7 @@ export const startSession = async (userId, io, phoneNumber = null) => {
                         user.pause_until = null;
                         user.control_group_jid = remoteJid;
                         await user.save();
-                        await sock.sendMessage(remoteJid, { text: '✅ تم إعادة تشغيل البوت للرد على الجميع.' });
+                        await sendHumanMessage(sock, remoteJid, { text: '✅ تم إعادة تشغيل البوت للرد على الجميع.' }, { userId });
                         return;
                     }
 
@@ -1115,12 +1091,12 @@ export const startSession = async (userId, io, phoneNumber = null) => {
                             const dateStr = unlockTime.toLocaleDateString('en-GB'); // DD/MM/YYYY
                             const timeStr = unlockTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true });
 
-                            await sock.sendMessage(remoteJid, { text: `✅ تم إيقاف الرد مؤقتاً لمدة ${num} ${unit}.\n\nسيتم الاستئناف تلقائياً في:\n${dateStr}\nالساعة\n${timeStr}` });
+                            await sendHumanMessage(sock, remoteJid, { text: `✅ تم إيقاف الرد مؤقتاً لمدة ${num} ${unit}.\n\nسيتم الاستئناف تلقائياً في:\n${dateStr}\nالساعة\n${timeStr}` }, { userId });
 
                         } else {
                             // If just "انتظر", ask for duration? 
                             // For simplicity in V1, let's just ask to specify.
-                            await sock.sendMessage(remoteJid, { text: '⚠️ يرجى تحديد المدة. مثال: "انتظر 15 دقيقة" أو "انتظر 2 ساعة".' });
+                            await sendHumanMessage(sock, remoteJid, { text: '⚠️ يرجى تحديد المدة. مثال: "انتظر 15 دقيقة" أو "انتظر 2 ساعة".' }, { userId });
                         }
                         return;
                     }
@@ -1133,17 +1109,11 @@ export const startSession = async (userId, io, phoneNumber = null) => {
                 if (groupMetadata.subject && groupMetadata.subject.includes("عبقرينو")) {
                     console.log(`🤖 Abkarino Group Message: ${text}`);
 
-                    // Simulate Typing
-                    await sock.sendPresenceUpdate('composing', remoteJid);
-
                     // Call Abkarino API
                     const replyText = await callAbkarinoAPI(text, userId);
 
-                    // Stop Typing
-                    await sock.sendPresenceUpdate('paused', remoteJid);
-
-                    // Send Reply
-                    await sock.sendMessage(remoteJid, { text: replyText });
+                    // Send Reply via Anti-Ban Queue (simulates typing inside queue)
+                    await sendHumanMessage(sock, remoteJid, { text: replyText }, { userId });
 
                     // Save Bot Reply
                     const savedResponse = await Message.create({
@@ -1253,7 +1223,7 @@ export const startSession = async (userId, io, phoneNumber = null) => {
         if (remoteJid.endsWith('@g.us')) {
             // Double check if it's the control group, just in case
             try {
-                const groupMetadata = await sock.groupMetadata(remoteJid);
+                const groupMetadata = await getCachedGroupMetadata(sock, remoteJid);
                 if (groupMetadata.subject && (groupMetadata.subject.includes("لينا") || groupMetadata.subject.toLowerCase().includes("lina"))) {
                     console.log(`[Safety Check] Allowed Lina group message to pass through ignore block: ${remoteJid}`);
                     // Allowed Lina group msg to proceed to AI.
@@ -1265,20 +1235,6 @@ export const startSession = async (userId, io, phoneNumber = null) => {
                 console.log(`Ignoring group message (metadata fetch failed) from: ${remoteJid}`);
                 return;
             }
-        }
-
-        // 🛡️ Anti-Spam Debounce per Contact: Wait 3 seconds to batch rapid user messages
-        if (!remoteJid.endsWith('@g.us') && !msg.key.fromMe) {
-            const debounceKey = `${userId}_${remoteJid}`;
-            const msgToken = Date.now() + '_' + Math.random();
-            contactDebounceMap.set(debounceKey, msgToken);
-            await new Promise(r => setTimeout(r, 3000));
-            // If a newer message arrived during these 3 seconds, drop this execution
-            if (contactDebounceMap.get(debounceKey) !== msgToken) {
-                console.log(`⏱️ [Debounce] Newer message arrived from ${remoteJid}. Dropping earlier duplicate trigger.`);
-                return;
-            }
-            contactDebounceMap.delete(debounceKey);
         }
 
         // ======================================================
@@ -1297,7 +1253,7 @@ export const startSession = async (userId, io, phoneNumber = null) => {
                 console.log(`[Menu-Only] ✅ Handoff triggered for ${remoteJid} (user requested agent).`);
                 
                 const handoffMsg = 'جاري تحويلك لأحد ممثلي خدمة العملاء. يرجى الانتظار 🙏';
-                await sendHumanMessage(sock, remoteJid, { text: handoffMsg }, { userId });
+                await sendHumanMessage(sock, remoteJid, { text: handoffMsg }, { userId, readMessageKey: msg.key });
                 const svHandoff = await Message.create({ UserId: userId, remoteJid, role: 'model', content: handoffMsg });
                 io.to(`user_${userId}`).emit('new_message', svHandoff);
 
@@ -1319,7 +1275,7 @@ export const startSession = async (userId, io, phoneNumber = null) => {
                         }
                     }
                     if (targetJid) {
-                        await sock.sendMessage(targetJid, { text: notifyMsg });
+                        await sendHumanMessage(sock, targetJid, { text: notifyMsg }, { userId });
                         console.log(`[Menu-Only] ✅ Handoff notification sent to group ${targetJid}`);
                     }
                 } catch (e) {
@@ -1332,7 +1288,7 @@ export const startSession = async (userId, io, phoneNumber = null) => {
             console.log(`[Menu-Only] 🔒 Free text blocked for ${remoteJid}: "${text}"`);
             
             const guidanceMsg = '⚠️ عذراً، لم أتمكن من فهم رسالتك.\n\n👉 يرجى اختيار رقم من القائمة أدناه، أو أرسل كلمة "موظف" للتحدث مع خدمة العملاء.';
-            await sendHumanMessage(sock, remoteJid, { text: guidanceMsg }, { userId });
+            await sendHumanMessage(sock, remoteJid, { text: guidanceMsg }, { userId, readMessageKey: msg.key });
             const svGuidance = await Message.create({ UserId: userId, remoteJid, role: 'model', content: guidanceMsg });
             io.to(`user_${userId}`).emit('new_message', svGuidance);
             
@@ -1353,22 +1309,18 @@ export const startSession = async (userId, io, phoneNumber = null) => {
                 if (menuMatch) resendMenuId = parseInt(menuMatch[1]);
             }
             
-            await new Promise(resolve => setTimeout(resolve, 2000));
             await sendInteractiveButtons(sock, remoteJid, userId, io, resendMenuId, conversation?.customerName);
             return;
         }
         // === End Menu-Only Mode ===
 
         // 5. Process AI Response (Vertex AI for Customers)
-        // Simulate Typing
-        await sock.sendPresenceUpdate('composing', remoteJid);
-
+        // NOTE: Vertex AI runs in parallel via vertexQueue; WhatsApp presence (`composing`)
+        // and read receipt (`readMessageKey`) are handled cleanly inside `sendHumanMessage` FIFO queue!
         let aiResponse = null;
         if (messageType === 'conversation' || messageType === 'extendedTextMessage') {
             aiResponse = await callVertexAI(remoteJid, text, null, null, userId);
         } else if (messageType === 'audioMessage') {
-            // ... (Voice handling logic same as before)
-            // For brevity, assuming voice logic remains similar or reusing existing callVertexAI with voice support
             console.log("🎤 Processing audio message...");
             try {
                 const buffer = await downloadMediaMessage(
@@ -1402,10 +1354,6 @@ export const startSession = async (userId, io, phoneNumber = null) => {
             }
         }
 
-        // Stop Typing
-        await sock.sendPresenceUpdate('paused', remoteJid);
-
-
         let replyText = aiResponse ? aiResponse.text : "";
 
         if (replyText) {
@@ -1426,9 +1374,9 @@ export const startSession = async (userId, io, phoneNumber = null) => {
                 await Conversation.update({ is_handoff: true }, { where: { UserId: userId, remoteJid } });
                 console.log(`[AI Handoff] ✅ Conversation ${remoteJid} marked as handoff (bot paused).`);
                 
-                // 2. Send message to customer
+                // 2. Send message to customer via Anti-Ban Queue
                 const handoffMsg = 'عفواً، سأقوم بتحويلك لأحد ممثلي خدمة العملاء. يرجى الانتظار.';
-                await sock.sendMessage(remoteJid, { text: handoffMsg });
+                await sendHumanMessage(sock, remoteJid, { text: handoffMsg }, { userId, readMessageKey: msg.key });
                 const sv = await Message.create({ UserId: userId, remoteJid, role: 'model', content: handoffMsg });
                 io.to('user_' + userId).emit('new_message', sv);
 
@@ -1465,7 +1413,7 @@ export const startSession = async (userId, io, phoneNumber = null) => {
                     }
 
                     if (targetJid) {
-                        await sock.sendMessage(targetJid, { text: notifyMsg });
+                        await sendHumanMessage(sock, targetJid, { text: notifyMsg }, { userId });
                         console.log(`[AI Handoff] ✅ Notification sent to group ${targetJid}`);
                     } else {
                         console.log('[AI Handoff] ❌ No group named لينا/Lina found! Check group name.');
@@ -1488,7 +1436,7 @@ export const startSession = async (userId, io, phoneNumber = null) => {
                 return `${cleanText}: ${cleanUrl}`;
             });
 
-            await sendHumanMessage(sock, remoteJid, { text: replyText }, { userId });
+            await sendHumanMessage(sock, remoteJid, { text: replyText }, { userId, readMessageKey: msg.key });
 
             const savedResponse = await Message.create({
                 UserId: userId,
@@ -1520,7 +1468,6 @@ export const startSession = async (userId, io, phoneNumber = null) => {
                                     if (prod.price) caption += `\nالسعر: ${prod.price} ${prod.currency}`;
                                     if (prod.description) caption += `\n\n${prod.description}`;
                                     
-                                    await new Promise(r => setTimeout(r, 2500 + Math.floor(Math.random() * 2000)));
                                     await sendHumanMessage(sock, remoteJid, {
                                         image: { url: imagePath },
                                         caption: caption
@@ -1533,7 +1480,6 @@ export const startSession = async (userId, io, phoneNumber = null) => {
                                             const extraImgPath = path.join(process.cwd(), 'public', images[i].url);
                                             if (fs.existsSync(extraImgPath)) {
                                                 let extraCap = images[i].description || '';
-                                                await new Promise(r => setTimeout(r, 2000));
                                                 await sendHumanMessage(sock, remoteJid, { image: { url: extraImgPath }, caption: extraCap }, { userId });
                                             }
                                         }
@@ -1546,7 +1492,6 @@ export const startSession = async (userId, io, phoneNumber = null) => {
                                 let textMsg = `*${prod.name}*`;
                                 if (prod.price) textMsg += `\nالسعر: ${prod.price} ${prod.currency}`;
                                 if (prod.description) textMsg += `\n\n${prod.description}`;
-                                await new Promise(r => setTimeout(r, 2000));
                                 await sendHumanMessage(sock, remoteJid, { text: textMsg }, { userId });
                                 console.log(`   ✅ Sent Product Text: ${prod.name}`);
                             }
@@ -1849,7 +1794,7 @@ export const checkPauseTimer = async (io) => {
                     try {
                         const sock = sessions.get(user.id);
                         if (sock) {
-                            await sock.sendMessage(user.control_group_jid, { text: '✅ انتهت مدة الانتظار. تم استئناف الرد التلقائي.' });
+                            await sendHumanMessage(sock, user.control_group_jid, { text: '✅ انتهت مدة الانتظار. تم استئناف الرد التلقائي.' }, { userId: user.id });
                         }
                     } catch (err) {
                         console.error(`[Pause Timer] Error sending resume notification for user ${user.id}:`, err);
@@ -1916,11 +1861,8 @@ export const checkInactivitySummary = async () => {
                 const phoneDisplay = conv.phoneNumber || conv.remoteJid.split('@')[0];
                 const summaryMsg = `📋 *ملخص محادثة منتهية (لا رد منذ 15 دقيقة)*\n\n👤 العميل: ${customerDisplay}\n📱 الرقم: ${phoneDisplay}\n📱 المنصة: واتساب\n🕐 آخر رسالة: ${conv.lastMessageAt?.toLocaleTimeString('ar-EG') || '-'}\n\n─────────────────\n${chatLog}\n─────────────────\n\nيرجى المتابعة مع العميل إذا لزم الأمر.`;
 
-                await sock.sendMessage(user.control_group_jid, { text: summaryMsg });
+                await sendHumanMessage(sock, user.control_group_jid, { text: summaryMsg }, { userId: user.id });
                 console.log(`[InactivitySummary] Sent summary for ${conv.remoteJid} (User: ${user.id})`);
-                
-                // Anti-Ban: Force a strict 4-second delay between sending summaries to prevent rate-limit flags
-                await new Promise(resolve => setTimeout(resolve, 4000));
             } catch (err) {
                 console.error(`[InactivitySummary] Error for conv ${conv.id}:`, err.stack || err.message);
             }
@@ -2504,8 +2446,8 @@ export async function sendManualMessage(userId, remoteJid, text) {
     const sock = sessions.get(parseInt(userId, 10)) || sessions.get(String(userId));
     if (!sock) throw new Error("البوت غير متصل حالياً.");
     
-    // إرسال الرسالة
-    await sock.sendMessage(remoteJid, { text });
+    // إرسال الرسالة عبر طابور الحماية المركزي (يكتب الآن + تنويع بصمة النص + منع الإرسال المتزامن)
+    await sendHumanMessage(sock, remoteJid, { text }, { userId });
     
     // حفظ الرسالة
     const savedMsg = await Message.create({
@@ -2531,7 +2473,7 @@ export async function notifyControlGroup(userId, message) {
         
         const sock = sessions.get(parseInt(userId, 10)) || sessions.get(String(userId));
         if (sock) {
-            await sock.sendMessage(userObj.control_group_jid, { text: message });
+            await sendHumanMessage(sock, userObj.control_group_jid, { text: message }, { userId });
             return true;
         }
     } catch (error) {

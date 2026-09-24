@@ -35,3 +35,8 @@ scratch/
 
 # Sensitive JSON keys
 project-*.json
+project-*.json*
+fast-order-*.json
+fast-order-*.json*
+*.old
+
