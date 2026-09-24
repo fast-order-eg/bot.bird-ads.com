@@ -22,6 +22,8 @@ database.sqlite
 # Uploads & Media
 public/uploads/*
 !public/uploads/.gitkeep
+!public/uploads/hisham2026/
+!public/uploads/hisham2026/*
 
 # Logs & Temp
 *.log
