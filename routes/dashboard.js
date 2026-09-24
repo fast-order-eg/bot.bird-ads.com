@@ -1,5 +1,5 @@
 import express from 'express';
-import { startSession, stopSession, logoutSession, getStatus, getGroups, sendManualMessage } from '../controllers/botController.js';
+import { startSession, stopSession, logoutSession, getStatus, getGroups, sendManualMessage, notifyControlGroup } from '../controllers/botController.js';
 import User from '../models/User.js';
 import Message from '../models/Message.js';
 import Conversation from '../models/Conversation.js';
@@ -27,9 +27,10 @@ router.get('/', async (req, res) => {
     if (req.user.role === 'super_admin') {
         return res.redirect('/admin');
     }
+    const freshUser = await User.findByPk(req.user.id);
     const statusResult = await getStatus(req.user.id);
     res.render('user_dashboard', {
-        user: req.user,
+        user: freshUser || req.user,
         status: statusResult.status || 'offline',
         phone: statusResult.phone || '',
         page: 'home'
@@ -66,11 +67,63 @@ router.post('/logout-bot', async (req, res) => {
 router.get('/groups', async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
-        const groups = await getGroups(req.user.id, page);
+        const detailed = req.query.detailed === '1';
+        if (detailed) {
+            const freshUser = await User.findByPk(req.user.id);
+            const result = await getGroups(req.user.id, page, 10, true);
+            return res.json({
+                ...result,
+                selectedGroupJid: freshUser?.control_group_jid || null,
+                selectedGroupName: freshUser?.settings?.control_group_name || null
+            });
+        }
+        const groups = await getGroups(req.user.id, page, 10, false);
         res.json(groups);
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Failed to fetch groups' });
+    }
+});
+
+router.post('/select-control-group', async (req, res) => {
+    try {
+        const { groupId, groupName } = req.body;
+        if (!groupId) {
+            return res.status(400).json({ success: false, error: 'يرجى اختيار جروب صحيح' });
+        }
+
+        const user = await User.findByPk(req.user.id);
+        if (!user) {
+            return res.status(404).json({ success: false, error: 'المستخدم غير موجود' });
+        }
+
+        const currentSettings = (user.settings && typeof user.settings === 'object') ? { ...user.settings } : {};
+        currentSettings.control_group_name = groupName || 'جروب التحكم المختار';
+
+        user.control_group_jid = groupId;
+        user.settings = currentSettings;
+        user.changed('settings', true);
+        await user.save();
+
+        // Update actionTarget in user's instructions so order summaries also target this group
+        if (groupName) {
+            await Instruction.update({ actionTarget: groupName }, { where: { UserId: req.user.id } });
+        }
+
+        // Send confirmation message inside the selected WhatsApp group
+        notifyControlGroup(
+            req.user.id,
+            `✅ *تم ربط هذا الجروب بنجاح كجروب التحكم والملخصات*\n\nسيتم إرسال جميع طلبات العملاء، وملخصات المحادثات، وإشعارات التدخل البشري إلى هذا الجروب.\n\n💡 يمكنك أيضاً التحكم في البوت من داخل هذا الجروب بإرسال:\n- *ايقاف* أو *stop*\n- *تشغيل* أو *start*\n- *انتظر 15 دقيقة*`
+        ).catch(() => {});
+
+        return res.json({
+            success: true,
+            selectedGroupJid: groupId,
+            selectedGroupName: currentSettings.control_group_name
+        });
+    } catch (err) {
+        console.error('Error selecting control group:', err);
+        return res.status(500).json({ success: false, error: 'حدث خطأ أثناء حفظ الجروب المختار' });
     }
 });
 

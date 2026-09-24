@@ -1056,9 +1056,12 @@ export const startSession = async (userId, io, phoneNumber = null) => {
                 // Fetch group metadata (Cached for 30 mins to prevent rate-limiting)
                 const groupMetadata = await getCachedGroupMetadata(sock, remoteJid);
 
-                // Check for "Lina" Group (Control Center)
-                if (groupMetadata.subject && (groupMetadata.subject.includes("لينا") || groupMetadata.subject.toLowerCase().includes("lina"))) {
-                    console.log(`🔧 Lina Control Group Message: ${text}`);
+                // Check for Selected Control Group (from Dashboard) or "Lina" Group
+                const isSelectedControlGroup = Boolean(user.control_group_jid && remoteJid === user.control_group_jid);
+                const isLinaNamedGroup = Boolean(groupMetadata.subject && (groupMetadata.subject.includes("لينا") || groupMetadata.subject.toLowerCase().includes("lina")));
+
+                if (isSelectedControlGroup || isLinaNamedGroup) {
+                    console.log(`🔧 Control Group Message (${groupMetadata.subject || remoteJid}): ${text}`);
 
                     const normalizeCmd = text.trim().toLowerCase();
 
@@ -1678,74 +1681,96 @@ export const getStatus = async (userId) => {
 
 
 
-export const getGroups = async (userId, page = 1, limit = 10) => {
-    const sock = sessions.get(userId);
+const userGroupsCache = new Map(); // userId -> { timestamp, groups: [] }
+
+export const getGroups = async (userId, page = 1, limit = 10, returnDetails = false) => {
+    const sock = sessions.get(parseInt(userId, 10)) || sessions.get(String(userId));
     if (!sock || !sock.user) {
-        return [];
+        return returnDetails ? { connected: false, groups: [], hasMore: false, total: 0 } : [];
     }
 
     try {
-        // 1. Fetch all groups metadata from Baileys (Cached)
-        const groupsPromise = sock.groupFetchAllParticipating();
-        // user timeout
-        const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve({}), 3000));
-        const result = await Promise.race([groupsPromise, timeoutPromise]);
+        let allGroups = [];
+        const cacheKey = String(userId);
+        const cached = userGroupsCache.get(cacheKey);
 
-        if (!result || Object.keys(result).length === 0) {
-            return [];
+        // Use 45s cache when paginating ("Show More") for instant loading, or fetch fresh on page 1
+        if (page > 1 && cached && (Date.now() - cached.timestamp < 45000) && cached.groups.length > 0) {
+            allGroups = cached.groups;
+        } else {
+            // 1. Fetch all groups metadata from Baileys
+            const groupsPromise = sock.groupFetchAllParticipating();
+            const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve({}), 8000));
+            const result = await Promise.race([groupsPromise, timeoutPromise]);
+
+            if (!result || Object.keys(result).length === 0) {
+                return returnDetails ? { connected: true, groups: [], hasMore: false, total: 0 } : [];
+            }
+
+            allGroups = Object.values(result);
+
+            // 2. Fetch last activity time from DB for these groups
+            const groupJids = allGroups.map(g => g.id);
+
+            const recentMessages = await Message.findAll({
+                attributes: [
+                    'remoteJid',
+                    [Sequelize.fn('MAX', Sequelize.col('createdAt')), 'lastActivity']
+                ],
+                where: {
+                    remoteJid: {
+                        [Op.in]: groupJids
+                    },
+                    UserId: userId
+                },
+                group: ['remoteJid'],
+                raw: true
+            });
+
+            // Create a map for quick lookup: JID -> Timestamp
+            const activityMap = new Map();
+            recentMessages.forEach(msg => {
+                activityMap.set(msg.remoteJid, new Date(msg.lastActivity).getTime());
+            });
+
+            // 3. Sort groups: Active first, then by Creation date (newest first)
+            allGroups.sort((a, b) => {
+                const timeA = activityMap.get(a.id) || 0;
+                const timeB = activityMap.get(b.id) || 0;
+
+                if (timeA !== timeB) {
+                    return timeB - timeA; // Descending (newest activity first)
+                }
+                return (b.creation || 0) - (a.creation || 0); // Fallback to creation date
+            });
+
+            userGroupsCache.set(cacheKey, { timestamp: Date.now(), groups: allGroups });
         }
 
-        let allGroups = Object.values(result);
-
-        // 2. Fetch last activity time from DB for these groups
-        // We want to sort by the most recent message sent/received in the group
-        const groupJids = allGroups.map(g => g.id);
-
-        const recentMessages = await Message.findAll({
-            attributes: [
-                'remoteJid',
-                [Sequelize.fn('MAX', Sequelize.col('createdAt')), 'lastActivity']
-            ],
-            where: {
-                remoteJid: {
-                    [Op.in]: groupJids
-                },
-                UserId: userId
-            },
-            group: ['remoteJid'],
-            raw: true
-        });
-
-        // Create a map for quick lookup: JID -> Timestamp
-        const activityMap = new Map();
-        recentMessages.forEach(msg => {
-            activityMap.set(msg.remoteJid, new Date(msg.lastActivity).getTime());
-        });
-
-        // 3. Sort groups: Active first, then by Creation date
-        allGroups.sort((a, b) => {
-            const timeA = activityMap.get(a.id) || 0;
-            const timeB = activityMap.get(b.id) || 0;
-
-            if (timeA !== timeB) {
-                return timeB - timeA; // Descending (newest activity first)
-            }
-            return (b.creation || 0) - (a.creation || 0); // Fallback to creation date
-        });
-
-        // 4. Pagination
+        // 4. Pagination (10 per page)
         const startIndex = (page - 1) * limit;
         const endIndex = startIndex + limit;
-        const paginatedGroups = allGroups.slice(startIndex, endIndex);
-
-        return paginatedGroups.map(g => ({
+        const paginatedGroups = allGroups.slice(startIndex, endIndex).map(g => ({
             id: g.id,
-            subject: g.subject
+            subject: g.subject || 'جروب بدون اسم',
+            participantsCount: Array.isArray(g.participants) ? g.participants.length : 0
         }));
+
+        if (returnDetails) {
+            return {
+                connected: true,
+                groups: paginatedGroups,
+                hasMore: endIndex < allGroups.length,
+                total: allGroups.length,
+                page: page
+            };
+        }
+
+        return paginatedGroups;
 
     } catch (error) {
         console.error("Error fetching groups:", error);
-        return [];
+        return returnDetails ? { connected: true, groups: [], hasMore: false, total: 0, error: error.message } : [];
     }
 };
 

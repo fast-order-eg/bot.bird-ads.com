@@ -234,24 +234,61 @@
                                 style="right: 39px; top: 0; border-color: rgba(255,255,255,0.1) !important; z-index: 0;">
                             </div>
 
-                            <!-- Step 1 -->
+                            <!-- Step 1: Interactive Control Group Selector -->
                             <div class="d-flex position-relative mb-4 align-items-start gap-3">
                                 <div class="flex-shrink-0" style="z-index: 1;">
                                     <div class="d-flex align-items-center justify-content-center bg-primary rounded-circle shadow fw-bold text-white"
                                         style="width: 32px; height: 32px; font-family: sans-serif;">1</div>
                                 </div>
-                                <div>
-                                    <h6 class="text-white fw-bold mb-1">إنشاء جروب التحكم</h6>
-                                    <p class="text-white-50 small mb-0 lh-base">
-                                        اعمل جروب واتساب جديد وضيف البوت فيه. سمّي الجروب
-                                        <span
-                                            class="badge bg-dark border border-secondary text-warning fw-normal mx-1 font-monospace"
-                                            dir="ltr">Lina</span>
-                                        أو
-                                        <span
-                                            class="badge bg-dark border border-secondary text-warning fw-normal mx-1">لينا</span>
-                                        علشان البوت يعرفه.
+                                <div class="w-100">
+                                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                                        <h6 class="text-white fw-bold mb-0">تحديد جروب التحكم والملخصات</h6>
+                                        <span id="current-group-badge" class="badge <%= user.control_group_jid ? 'bg-success bg-opacity-25 text-success border border-success border-opacity-50' : 'bg-secondary bg-opacity-25 text-white-50 border border-secondary border-opacity-25' %> px-3 py-2 rounded-pill">
+                                            <% if (user.control_group_jid) { %>
+                                                ✅ الجروب المربوط: <strong class="text-white"><%= (user.settings && user.settings.control_group_name) ? user.settings.control_group_name : 'جروب واتساب مفعل' %></strong>
+                                            <% } else { %>
+                                                ⚪ لم يتم تحديد جروب بعد
+                                            <% } %>
+                                        </span>
+                                    </div>
+
+                                    <p class="text-white-50 small mb-3 lh-base">
+                                        اختر أي جروب من جروبات الواتساب الخاصة بك ليصل إليه تلقائياً <strong class="text-white">ملخصات الطلبات، وملخصات المحادثات، وإشعارات التدخل البشري</strong> (أو سمِّ أي جروب باسم <span class="badge bg-dark border border-secondary text-warning fw-normal mx-1 font-monospace" dir="ltr">Lina</span> أو <span class="badge bg-dark border border-secondary text-warning fw-normal mx-1">لينا</span>).
                                     </p>
+
+                                    <button type="button" id="open-group-picker-btn" class="btn btn-primary btn-sm rounded-pill px-4 py-2 fw-bold shadow-sm d-inline-flex align-items-center gap-2">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-people-fill" viewBox="0 0 16 16">
+                                            <path d="M7 14s-1 0-1-1 1-4 5-4 5 3 5 4-1 1-1 1H7Zm4-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm-5.784 6A2.238 2.238 0 0 1 5 13c0-1.355.68-2.75 1.936-3.72A6.325 6.325 0 0 0 5 9c-4 0-5 3-5 4s1 1 1 1h4.216ZM4.5 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/>
+                                        </svg>
+                                        <span id="open-group-picker-text"><%= user.control_group_jid ? 'تغيير الجروب المختار' : 'اختيار جروب التحكم الآن' %></span>
+                                    </button>
+
+                                    <!-- Group Picker Collapsible Panel (Responsive for Mobile & Desktop) -->
+                                    <div id="control-group-picker-panel" class="mt-3 p-3 rounded-4 d-none" style="background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.12);">
+                                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                                            <span class="text-white fw-bold small">📋 قائمة أحدث الجروبات على رقمك:</span>
+                                            <button type="button" id="close-group-picker-btn" class="btn btn-sm btn-outline-light rounded-pill px-3 py-1" style="font-size: 0.75rem;">إغلاق ✕</button>
+                                        </div>
+
+                                        <!-- Quick Filter Input -->
+                                        <div id="group-search-wrapper" class="mb-3 d-none">
+                                            <input type="text" id="group-search-input" class="form-control form-control-sm bg-dark text-white border-secondary rounded-pill px-3" placeholder="🔍 ابحث باسم الجروب...">
+                                        </div>
+
+                                        <!-- Alert / Status Box -->
+                                        <div id="group-picker-alert" class="d-none"></div>
+
+                                        <!-- Groups List Container -->
+                                        <div id="group-picker-list" class="d-flex flex-column gap-2" style="max-height: 320px; overflow-y: auto; padding-left: 4px;"></div>
+
+                                        <!-- Load More Button -->
+                                        <div id="group-load-more-wrapper" class="mt-3 text-center d-none">
+                                            <button type="button" id="group-load-more-btn" class="btn btn-outline-info btn-sm rounded-pill px-4 py-2 w-100 fw-semibold">
+                                                ➕ عرض المزيد (أحدث 10 جروبات تالية)
+                                            </button>
+                                            <small id="group-count-info" class="text-white-50 d-block mt-1" style="font-size: 0.75rem;"></small>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -795,6 +832,195 @@
                         }
                     });
                 }
+
+                // ===== Interactive Control Group Picker (10 by 10 Pagination + Mobile Responsive) =====
+                (function () {
+                    const openBtn = document.getElementById('open-group-picker-btn');
+                    const openBtnText = document.getElementById('open-group-picker-text');
+                    const closeBtn = document.getElementById('close-group-picker-btn');
+                    const panel = document.getElementById('control-group-picker-panel');
+                    const alertBox = document.getElementById('group-picker-alert');
+                    const listContainer = document.getElementById('group-picker-list');
+                    const loadMoreWrapper = document.getElementById('group-load-more-wrapper');
+                    const loadMoreBtn = document.getElementById('group-load-more-btn');
+                    const countInfo = document.getElementById('group-count-info');
+                    const currentBadge = document.getElementById('current-group-badge');
+                    const searchWrapper = document.getElementById('group-search-wrapper');
+                    const searchInput = document.getElementById('group-search-input');
+
+                    let currentPage = 1;
+                    let loadedGroups = [];
+                    let currentSelectedJid = '<%= user.control_group_jid || "" %>';
+
+                    function showAlert(type, htmlMsg) {
+                        alertBox.className = `alert alert-${type} py-2 px-3 small rounded-3 mb-2`;
+                        alertBox.innerHTML = htmlMsg;
+                        alertBox.classList.remove('d-none');
+                    }
+
+                    function hideAlert() {
+                        alertBox.classList.add('d-none');
+                        alertBox.innerHTML = '';
+                    }
+
+                    function renderGroups(filterText = '') {
+                        listContainer.innerHTML = '';
+                        const normFilter = filterText.trim().toLowerCase();
+                        const filtered = normFilter
+                            ? loadedGroups.filter(g => (g.subject || '').toLowerCase().includes(normFilter))
+                            : loadedGroups;
+
+                        if (filtered.length === 0) {
+                            listContainer.innerHTML = '<div class="text-center text-white-50 py-3 small">لا توجد جروبات مطابقة للبحث.</div>';
+                            return;
+                        }
+
+                        filtered.forEach(group => {
+                            const isSelected = (currentSelectedJid && group.id === currentSelectedJid);
+                            const item = document.createElement('div');
+                            item.className = `d-flex flex-wrap align-items-center justify-content-between gap-2 p-2 px-3 rounded-3 border ${isSelected ? 'bg-success bg-opacity-25 border-success' : 'bg-dark bg-opacity-50 border-secondary border-opacity-25'}`;
+                            item.innerHTML = `
+                                <div class="d-flex align-items-center gap-2 text-truncate" style="max-width: 68%;">
+                                    <span class="fs-5">${isSelected ? '✅' : '👥'}</span>
+                                    <div class="text-truncate">
+                                        <div class="text-white fw-semibold small text-truncate" title="${group.subject}">${group.subject}</div>
+                                        <small class="text-white-50" style="font-size: 0.7rem;">${group.participantsCount ? group.participantsCount + ' عضو' : 'جروب واتساب'}</small>
+                                    </div>
+                                </div>
+                                <button type="button" class="btn btn-sm ${isSelected ? 'btn-success disabled' : 'btn-outline-primary'} rounded-pill px-3 py-1 fw-bold select-group-action-btn" data-id="${group.id}" data-name="${(group.subject || '').replace(/"/g, '&quot;')}">
+                                    ${isSelected ? 'مُختار حالياً ✓' : 'اختيار'}
+                                </button>
+                            `;
+                            listContainer.appendChild(item);
+                        });
+
+                        // Bind click events to select buttons
+                        listContainer.querySelectorAll('.select-group-action-btn').forEach(btn => {
+                            btn.addEventListener('click', async () => {
+                                const gId = btn.getAttribute('data-id');
+                                const gName = btn.getAttribute('data-name');
+                                if (!gId) return;
+
+                                const origHtml = btn.innerHTML;
+                                btn.disabled = true;
+                                btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+                                try {
+                                    const res = await fetch('/dashboard/select-control-group', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ groupId: gId, groupName: gName })
+                                    });
+                                    const data = await res.json();
+                                    if (!res.ok || !data.success) {
+                                        throw new Error(data.error || 'فشل حفظ الجروب');
+                                    }
+
+                                    currentSelectedJid = gId;
+                                    currentBadge.className = 'badge bg-success bg-opacity-25 text-success border border-success border-opacity-50 px-3 py-2 rounded-pill';
+                                    currentBadge.innerHTML = `✅ الجروب المربوط: <strong class="text-white">${gName}</strong>`;
+                                    if (openBtnText) openBtnText.textContent = 'تغيير الجروب المختار';
+
+                                    showAlert('success', `🎉 تم تحديد الجروب <strong>"${gName}"</strong> بنجاح! سيصل إليه كل ملخصات الطلبات والمحادثات وتنبيهات التدخل البشري.`);
+                                    renderGroups(searchInput ? searchInput.value : '');
+                                } catch (err) {
+                                    alert(err.message || 'حدث خطأ أثناء اختيار الجروب');
+                                    btn.disabled = false;
+                                    btn.innerHTML = origHtml;
+                                }
+                            });
+                        });
+                    }
+
+                    async function fetchGroupsPage(page = 1) {
+                        if (page === 1) {
+                            loadedGroups = [];
+                            listContainer.innerHTML = '<div class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary" role="status"></div><div class="text-white-50 small mt-2">جاري جلب أحدث الجروبات من واتساب...</div></div>';
+                            hideAlert();
+                            loadMoreWrapper.classList.add('d-none');
+                        } else {
+                            loadMoreBtn.disabled = true;
+                            loadMoreBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> جاري تحميل 10 جروبات أخرى...';
+                        }
+
+                        try {
+                            const res = await fetch(`/dashboard/groups?page=${page}&detailed=1`);
+                            const data = await res.json();
+
+                            if (!data.connected) {
+                                listContainer.innerHTML = '';
+                                searchWrapper.classList.add('d-none');
+                                loadMoreWrapper.classList.add('d-none');
+                                showAlert('warning', '⚠️ <strong>برجاء ربط رقم الواتساب أولاً!</strong><br>قم بربط رقمك من الأعلى (عبر مسح الـ QR Code أو كود الربط) ثم اضغط هنا لاختيار الجروب.');
+                                return;
+                            }
+
+                            if (data.selectedGroupJid) {
+                                currentSelectedJid = data.selectedGroupJid;
+                            }
+
+                            const newGroups = Array.isArray(data.groups) ? data.groups : [];
+                            if (page === 1 && newGroups.length === 0) {
+                                listContainer.innerHTML = '<div class="text-center text-white-50 py-3 small">لا توجد جروبات متاحة على هذا الرقم حالياً.</div>';
+                                return;
+                            }
+
+                            // Append avoiding duplicates
+                            const existingIds = new Set(loadedGroups.map(g => g.id));
+                            newGroups.forEach(g => {
+                                if (!existingIds.has(g.id)) loadedGroups.push(g);
+                            });
+
+                            if (loadedGroups.length > 5) {
+                                searchWrapper.classList.remove('d-none');
+                            }
+
+                            renderGroups(searchInput ? searchInput.value : '');
+
+                            if (data.hasMore) {
+                                loadMoreWrapper.classList.remove('d-none');
+                                loadMoreBtn.disabled = false;
+                                loadMoreBtn.innerHTML = '➕ عرض المزيد (أحدث 10 جروبات تالية)';
+                                countInfo.textContent = `معروض حالياً ${loadedGroups.length} من أصل ${data.total} جروب`;
+                            } else {
+                                loadMoreWrapper.classList.add('d-none');
+                            }
+                        } catch (err) {
+                            console.error(err);
+                            showAlert('danger', 'حدث خطأ أثناء الاتصال بالسيرفر لجلب الجروبات.');
+                            if (page === 1) listContainer.innerHTML = '';
+                            loadMoreBtn.disabled = false;
+                            loadMoreBtn.innerHTML = '➕ عرض المزيد (أحدث 10 جروبات تالية)';
+                        }
+                    }
+
+                    if (openBtn) {
+                        openBtn.addEventListener('click', () => {
+                            panel.classList.remove('d-none');
+                            currentPage = 1;
+                            fetchGroupsPage(1);
+                        });
+                    }
+
+                    if (closeBtn) {
+                        closeBtn.addEventListener('click', () => {
+                            panel.classList.add('d-none');
+                        });
+                    }
+
+                    if (loadMoreBtn) {
+                        loadMoreBtn.addEventListener('click', () => {
+                            currentPage += 1;
+                            fetchGroupsPage(currentPage);
+                        });
+                    }
+
+                    if (searchInput) {
+                        searchInput.addEventListener('input', () => {
+                            renderGroups(searchInput.value);
+                        });
+                    }
+                })();
             </script>
 </body>
 
