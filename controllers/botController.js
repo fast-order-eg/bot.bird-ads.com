@@ -707,6 +707,7 @@ async function handleButtonResponse(sock, remoteJid, buttonId, userId, io) {
 }
 
 export const startSession = async (userId, io, phoneNumber = null) => {
+    userId = parseInt(userId, 10);
     // Enable Auto Reply in DB
     const user = await User.findByPk(userId);
 
@@ -1583,6 +1584,7 @@ export const startSession = async (userId, io, phoneNumber = null) => {
 };
 
 export const stopSession = async (userId, io) => {
+    userId = parseInt(userId, 10);
     // DISABLE Auto Reply in DB, but KEEP socket connection AND update status
     await User.update({ auto_reply: false, connection_status: 'paused' }, { where: { id: userId } });
 
@@ -1597,6 +1599,7 @@ export const stopSession = async (userId, io) => {
 };
 
 export const logoutSession = async (userId, io) => {
+    userId = parseInt(userId, 10);
     console.log(`Logout requested for user ${userId}`);
     try {
         await User.update({ auto_reply: false, linked_phone_number: null, connection_status: 'not_registered' }, { where: { id: userId } });
@@ -1659,6 +1662,7 @@ export const restoreSessions = async (io) => {
 };
 
 export const getStatus = async (userId) => {
+    userId = parseInt(userId, 10);
     try {
         const user = await User.findByPk(userId);
 

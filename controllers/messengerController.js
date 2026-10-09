@@ -93,14 +93,15 @@ export async function handleWebhook(req, res) {
                 }
                 
                 // تجاهل الـ read و delivery events
-                if (!event.message?.text) continue;
+                if (!event.message?.text && !event.postback?.payload && !event.message?.quick_reply?.payload) continue;
 
                 const senderId = event.sender.id;
-                const messageText = event.message.text;
-                console.log(`💬 [Messenger] Message from ${senderId}: "${messageText}"`);
+                const messageText = event.message?.text || event.postback?.title || '';
+                const quickReplyPayload = event.message?.quick_reply?.payload || event.postback?.payload || null;
+                console.log(`💬 [Messenger] Message from ${senderId}: "${messageText}"${quickReplyPayload ? ` [Payload: ${quickReplyPayload}]` : ''}`);
 
                 try {
-                    await processMessengerMessage(pageId, senderId, messageText);
+                    await processMessengerMessage(pageId, senderId, messageText, null, quickReplyPayload);
                 } catch (err) {
                     console.error(`[Messenger] Error processing message from ${senderId}:`, err);
                 }
@@ -233,7 +234,7 @@ async function replyToComment(commentId, message, accessToken) {
 // ======================================================
 // الدالة الرئيسية لمعالجة الرسائل والرد عليها بالـ AI
 // ======================================================
-async function processMessengerMessage(pageId, senderId, messageText, commentId = null) {
+async function processMessengerMessage(pageId, senderId, messageText, commentId = null, quickReplyPayload = null) {
     // 1. جيب بيانات الصفحة من قاعدة البيانات
     const { Op } = await import('sequelize');
     const page = await MessengerPage.findOne({ where: { [Op.or]: [{ pageId }, { instagramId: pageId } ], isActive: true } });
@@ -265,22 +266,143 @@ async function processMessengerMessage(pageId, senderId, messageText, commentId 
             return;
         }
 
-                // ====== وضع الرد الثابت ======
+        // جيب الصور المرفقة للرد الثابت إن وجدت
+        let fixedImages = [];
+        if (page.fixedReplyImages) {
+            try {
+                fixedImages = typeof page.fixedReplyImages === 'string' ? JSON.parse(page.fixedReplyImages) : page.fixedReplyImages;
+                if (!Array.isArray(fixedImages)) fixedImages = [];
+            } catch (e) {
+                fixedImages = [];
+            }
+        }
+
+        const cleanMsg = (messageText || '').trim().toLowerCase();
+        const isRequestingImages = quickReplyPayload === 'VIEW_FIXED_IMAGES' || 
+                                   cleanMsg === '📸 عرض الصور' || 
+                                   cleanMsg.includes('عرض الصور') || 
+                                   cleanMsg.includes('وريني الصور') || 
+                                   cleanMsg.includes('عايز الصور') || 
+                                   cleanMsg.includes('عاوزه الصور') || 
+                                   cleanMsg.includes('عايزه الصور') || 
+                                   cleanMsg === 'الصور' || 
+                                   cleanMsg === 'صور';
+
+        // إذا ضغط العميل على زرار عرض الصور أو طلب الصور بالاسم في وضع الرد الثابت
+        if (page.replyMode === 'fixed' && isRequestingImages) {
+            if (fixedImages.length > 0) {
+                console.log(`📸 [Fixed Images] Sending ${fixedImages.length} images to ${senderId}`);
+                await sendMessengerImages(senderId, fixedImages, accessToken);
+            } else {
+                await sendMessengerReply(senderId, 'عفواً، لا توجد صور إضافية متوفرة حالياً.', accessToken);
+            }
+            await conversation.update({ messageCount: conversation.messageCount + 1, lastMessageAt: new Date() });
+            clearInterval(typingInterval);
+            return;
+        }
+
+        // معالجة الأزرار التفاعلية المخصصة إن وجدت
+        if (quickReplyPayload && quickReplyPayload.startsWith('BTN_')) {
+            const btnIdOrPk = quickReplyPayload.replace('BTN_', '');
+            try {
+                const InteractiveButton = (await import('../models/InteractiveButton.js')).default;
+                const button = await InteractiveButton.findOne({
+                    where: {
+                        [Op.or]: [{ id: btnIdOrPk }, { buttonId: btnIdOrPk }],
+                        UserId: userId,
+                        isActive: true
+                    }
+                });
+                if (button) {
+                    if (button.responseText) {
+                        await sendMessengerReply(senderId, button.responseText, accessToken);
+                    }
+                    if (button.responseImage) {
+                        await sendMessengerImage(senderId, button.responseImage, accessToken);
+                    }
+                    await conversation.update({ messageCount: conversation.messageCount + 1, lastMessageAt: new Date() });
+                    clearInterval(typingInterval);
+                    return;
+                }
+            } catch (btnErr) {
+                console.error('[Button Response Error]:', btnErr);
+            }
+        }
+
+        // ====== وضع الرد الثابت ======
         if (page.replyMode === 'fixed') {
             if (page.fixedReply) {
                 const isIg = Boolean(page.instagramId && (pageId === page.instagramId));
                 const allowReply = commentId ? true : (isIg ? page.replyToIgMessagesWithFixed : page.replyToMessagesWithFixed);
 
-                if (allowReply && (created || commentId)) {
-                    const fixedMsg = page.fixedReply;
+                // تخصيص اسم العميل لو الرسالة تحتوي على {name}
+                let fixedMsg = page.fixedReply;
+                if (conversation.senderName && conversation.senderName !== 'عميل') {
+                    fixedMsg = fixedMsg.replace(/{name}/g, conversation.senderName.split(' ')[0]);
+                } else {
+                    fixedMsg = fixedMsg.replace(/{name}/g, 'يا فندم');
+                }
+
+                if (allowReply && (created || commentId || conversation.messageCount <= 1)) {
                     await Message.create({ UserId: userId, remoteJid: `msng_${pageId}_${senderId}`, role: 'model', content: fixedMsg });
                     
                     if (commentId) {
                         await sendPrivateReplyToComment(commentId, fixedMsg, accessToken);
                     } else {
-                        await sendMessengerReply(senderId, fixedMsg, accessToken);
+                        // إعداد الأزرار السريعة (Quick Replies)
+                        let quickReplies = [];
+
+                        // 1. زرار عرض الصور إذا كانت هناك صور مرفقة
+                        if (fixedImages.length > 0) {
+                            quickReplies.push({
+                                content_type: 'text',
+                                title: '📸 عرض الصور',
+                                payload: 'VIEW_FIXED_IMAGES'
+                            });
+                        }
+
+                        // 2. الأزرار التفاعلية المخصصة لو الخيار مفعّل
+                        if (page.useButtonsWithFixedReply) {
+                            try {
+                                const InteractiveButton = (await import('../models/InteractiveButton.js')).default;
+                                const buttons = await InteractiveButton.findAll({
+                                    where: {
+                                        UserId: userId,
+                                        isActive: true,
+                                        platform: ['both', 'messenger']
+                                    },
+                                    order: [['order', 'ASC'], ['createdAt', 'ASC']],
+                                    limit: 10
+                                });
+                                for (const btn of buttons) {
+                                    if (quickReplies.length < 13) {
+                                        quickReplies.push({
+                                            content_type: 'text',
+                                            title: btn.label.substring(0, 20),
+                                            payload: `BTN_${btn.buttonId || btn.id}`
+                                        });
+                                    }
+                                }
+                            } catch (btnErr) {
+                                console.error('[Fixed Reply Buttons] Error fetching buttons:', btnErr);
+                            }
+                        }
+
+                        // إرسال الرد الثابت مع الأزرار
+                        if (quickReplies.length > 0) {
+                            await sendMessengerReply(senderId, fixedMsg, accessToken, quickReplies);
+                        } else {
+                            await sendMessengerReply(senderId, fixedMsg, accessToken);
+                        }
+
+                        // لو فيه صورة واحدة فقط مرفقة، إرسالها فوراً مع الرسالة
+                        if (fixedImages.length === 1) {
+                            await new Promise(r => setTimeout(r, 800));
+                            await sendMessengerImage(senderId, fixedImages[0], accessToken);
+                        }
                     }
-                    console.log(`✅ [Fixed Reply] Sent to ${senderId}`);
+                    console.log(`✅ [Fixed Reply] Sent to ${senderId}${fixedImages.length > 0 ? ` (with ${fixedImages.length} images option)` : ''}`);
+                    await conversation.update({ messageCount: conversation.messageCount + 1, lastMessageAt: new Date() });
                 } else if (!allowReply) {
                     console.log(`⏸️ [Fixed Reply] Messages reply disabled for ${isIg ? 'Instagram' : 'Facebook'}, skipping.`);
                 }
@@ -472,25 +594,89 @@ async function callVertexAIForMessenger(userId, senderId, userText, conversation
 // ======================================================
 // إرسال رد للماسنجر عبر Graph API
 // ======================================================
-export async function sendMessengerReply(recipientId, text, accessToken) {
+export async function sendMessengerReply(recipientId, text, accessToken, quickReplies = null) {
     try {
+        const payload = {
+            recipient: { id: recipientId },
+            message: { text: text.substring(0, 2000) }
+        };
+        if (quickReplies && Array.isArray(quickReplies) && quickReplies.length > 0) {
+            payload.message.quick_replies = quickReplies;
+        }
+
         const response = await fetch(`https://graph.facebook.com/v18.0/me/messages?access_token=${accessToken}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                recipient: { id: recipientId },
-                message: { text: text.substring(0, 2000) } // ميتا بتحد الرسالة بـ 2000 حرف
-            })
+            body: JSON.stringify(payload)
         });
 
         const data = await response.json();
         if (data.error) {
             console.error('[Messenger] Send Error:', data.error);
+            // لو فشل الإرسال بسبب quick_replies، حاول نبعت النص العادي فقط كـ fallback
+            if (payload.message.quick_replies) {
+                return await sendMessengerReply(recipientId, text, accessToken, null);
+            }
         } else {
-            console.log(`✅ [Messenger] Reply sent to ${recipientId}`);
+            console.log(`✅ [Messenger] Reply sent to ${recipientId}${quickReplies ? ' (with quick replies)' : ''}`);
         }
+        return data;
     } catch (err) {
         console.error('[Messenger] Failed to send reply:', err);
+    }
+}
+
+// ======================================================
+// إرسال صورة فردية للماسنجر عبر Graph API
+// ======================================================
+export async function sendMessengerImage(recipientId, imageUrl, accessToken) {
+    try {
+        let fullUrl = imageUrl;
+        if (!fullUrl.startsWith('http://') && !fullUrl.startsWith('https://')) {
+            fullUrl = `https://bot.bird-ads.com${fullUrl.startsWith('/') ? '' : '/'}${fullUrl}`;
+        }
+
+        const response = await fetch(`https://graph.facebook.com/v18.0/me/messages?access_token=${accessToken}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                recipient: { id: recipientId },
+                message: {
+                    attachment: {
+                        type: 'image',
+                        payload: {
+                            url: fullUrl,
+                            is_reusable: true
+                        }
+                    }
+                }
+            })
+        });
+
+        const data = await response.json();
+        if (data.error) {
+            console.error('[Messenger] Send Image Error:', data.error);
+            return false;
+        } else {
+            console.log(`✅ [Messenger] Image sent to ${recipientId}: ${fullUrl}`);
+            return true;
+        }
+    } catch (err) {
+        console.error('[Messenger] Failed to send image:', err);
+        return false;
+    }
+}
+
+// ======================================================
+// إرسال مجموعة صور متتالية للماسنجر
+// ======================================================
+export async function sendMessengerImages(recipientId, images, accessToken) {
+    if (!Array.isArray(images) || images.length === 0) return;
+    for (let i = 0; i < images.length; i++) {
+        await sendMessengerImage(recipientId, images[i], accessToken);
+        if (i < images.length - 1) {
+            await new Promise(r => setTimeout(r, 1200)); // فاصل ثانية بين كل صورة
+        }
     }
 }
 
