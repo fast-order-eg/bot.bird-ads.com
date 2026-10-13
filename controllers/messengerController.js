@@ -970,7 +970,10 @@ export function startFacebookAuth(req, res) {
         'pages_read_engagement',
         'pages_manage_metadata',
         'pages_messaging',
-        'pages_manage_engagement'
+        'pages_manage_engagement',
+        'instagram_basic',
+        'instagram_manage_messages',
+        'instagram_manage_comments'
     ].join(',');
 
     // نحفظ الـ userId في الـ session عشان نستخدمه بعد الـ callback
@@ -1016,9 +1019,9 @@ export async function handleFacebookCallback(req, res) {
         const userToken = tokenData.access_token;
         console.log('[Facebook OAuth] ✅ Got user access token');
 
-        // الخطوة 2: جيب كل الصفحات اللي عند اليوزر
+        // الخطوة 2: جيب كل الصفحات اللي عند اليوزر وحسابات الإنستجرام المرتبطة بها
         const pagesRes = await fetch(
-            `https://graph.facebook.com/v18.0/me/accounts?access_token=${userToken}&fields=id,name,access_token`
+            `https://graph.facebook.com/v18.0/me/accounts?access_token=${userToken}&fields=id,name,access_token,instagram_business_account{id,username}`
         );
         const pagesData = await pagesRes.json();
 
@@ -1033,6 +1036,10 @@ export async function handleFacebookCallback(req, res) {
         let savedCount = 0;
         for (const page of pagesData.data) {
             try {
+                const igAccount = page.instagram_business_account;
+                const igId = igAccount ? igAccount.id : null;
+                const igUsername = igAccount ? igAccount.username : null;
+
                 const [record, created] = await MessengerPage.findOrCreate({
                     where: { pageId: page.id },
                     defaults: {
@@ -1040,18 +1047,23 @@ export async function handleFacebookCallback(req, res) {
                         pageId: page.id,
                         pageName: page.name,
                         accessToken: page.access_token,
+                        instagramId: igId,
+                        instagramUsername: igUsername,
                         isActive: true
                     }
                 });
 
                 if (!created) {
-                    // حدّث الـ token لو الصفحة موجودة
-                    await record.update({
+                    // حدّث الـ token لو الصفحة موجودة وحساب الإنستجرام
+                    const updateData = {
                         pageName: page.name,
                         accessToken: page.access_token,
                         UserId: userId,
                         isActive: true
-                    });
+                    };
+                    if (igId) updateData.instagramId = igId;
+                    if (igUsername) updateData.instagramUsername = igUsername;
+                    await record.update(updateData);
                 }
 
                 // 👉 تفعيل الـ Webhook للصفحة عشان يتبعت لنا الرسائل والكومنتات
