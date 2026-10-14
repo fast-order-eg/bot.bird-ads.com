@@ -164,6 +164,8 @@ async function handleCommentEvent(pageId, commentData) {
 
                 // إرسال الرد الثابت دائماً مع أي كومنت جديد
                 await sendPrivateReplyToComment(commentId, fixedMsg, accessToken);
+                await conv.update({ messageCount: conv.messageCount + 1, lastMessageAt: new Date() });
+                await Message.create({ UserId: page.UserId, remoteJid: `msng_${pageId}_${commenterId}`, role: 'model', content: fixedMsg });
                 console.log(`✅ [Fixed Reply] Sent fixed reply to ${commenterId} (via comment)`);
             } catch (err) {
                 console.error('[Fixed Reply Comment] Error:', err);
@@ -343,7 +345,7 @@ async function processMessengerMessage(pageId, senderId, messageText, commentId 
                     fixedMsg = fixedMsg.replace(/{name}/g, 'يا فندم');
                 }
 
-                if (allowReply && (created || commentId || conversation.messageCount <= 1)) {
+                if (allowReply && (created || commentId || conversation.messageCount === 0)) {
                     await Message.create({ UserId: userId, remoteJid: `msng_${pageId}_${senderId}`, role: 'model', content: fixedMsg });
                     
                     if (commentId) {
@@ -405,6 +407,9 @@ async function processMessengerMessage(pageId, senderId, messageText, commentId 
                     await conversation.update({ messageCount: conversation.messageCount + 1, lastMessageAt: new Date() });
                 } else if (!allowReply) {
                     console.log(`⏸️ [Fixed Reply] Messages reply disabled for ${isIg ? 'Instagram' : 'Facebook'}, skipping.`);
+                } else {
+                    console.log(`⏸️ [Fixed Reply] Already sent greeting to ${senderId} (count: ${conversation.messageCount}). Skipping duplicate reply.`);
+                    await conversation.update({ lastMessageAt: new Date() });
                 }
             }
             clearInterval(typingInterval);
