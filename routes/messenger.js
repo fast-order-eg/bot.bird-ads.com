@@ -4,6 +4,7 @@ import {
     handleWebhook,
     getPages,
     connectPage,
+    connectWithSystemToken,
     disconnectPage,
     getConversations,
     getSummary,
@@ -41,6 +42,10 @@ router.get('/api/messenger/pages', (req, res) => {
 router.post('/api/messenger/connect', (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ success: false });
     return connectPage(req, res);
+});
+router.post('/api/messenger/connect-system-token', (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ success: false });
+    return connectWithSystemToken(req, res);
 });
 router.delete('/api/messenger/page/:pageId', (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ success: false });

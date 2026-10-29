@@ -73,6 +73,10 @@ const MessengerPage = sequelize.define('MessengerPage', {
         type: DataTypes.BOOLEAN,
         defaultValue: true
     },
+    isSystemUser: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false
+    },
     // الـ verify token بتاعنا اللي بنحطه في ميتا
     webhookVerifyToken: {
         type: DataTypes.STRING,

@@ -804,7 +804,35 @@ export async function getPages(req, res) {
     }
 }
 
-// ربط صفحة جديدة
+// دالة مساعدة لتفعيل الـ Webhook للصفحة
+async function subscribePageWebhook(pageId, accessToken, pageName) {
+    try {
+        const subscribeRes = await fetch(
+            `https://graph.facebook.com/v18.0/${pageId}/subscribed_apps`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    subscribed_fields: ['messages', 'messaging_postbacks', 'feed'],
+                    access_token: accessToken
+                })
+            }
+        );
+        const subscribeData = await subscribeRes.json();
+        if (subscribeData.success) {
+            console.log(`[Messenger Webhook] ✅ Subscribed page: ${pageName || pageId}`);
+            return true;
+        } else {
+            console.error(`[Messenger Webhook] ⚠️ Failed to subscribe page ${pageId}:`, subscribeData.error);
+            return false;
+        }
+    } catch (subErr) {
+        console.error(`[Messenger Webhook] ⚠️ Error subscribing page ${pageId}:`, subErr);
+        return false;
+    }
+}
+
+// ربط صفحة جديدة يدوي
 export async function connectPage(req, res) {
     try {
         const { pageId, pageName, accessToken } = req.body;
@@ -822,32 +850,135 @@ export async function connectPage(req, res) {
             await page.update({ pageName, accessToken, isActive: true });
         }
 
-        // 👉 تفعيل الـ Webhook للصفحة عشان يتبعت لنا الرسائل والكومنتات
-        try {
-            const subscribeRes = await fetch(
-                `https://graph.facebook.com/v18.0/${pageId}/subscribed_apps`,
-                {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        subscribed_fields: ['messages', 'messaging_postbacks', 'feed'],
-                        access_token: accessToken
-                    })
-                }
-            );
-            const subscribeData = await subscribeRes.json();
-            if (subscribeData.success) {
-                console.log(`[Messenger] ✅ Subscribed to webhooks (messages + feed) for page: ${pageName}`);
-            } else {
-                console.error(`[Messenger] ⚠️ Failed to subscribe webhook for page ${pageId}:`, subscribeData.error);
-            }
-        } catch (subErr) {
-            console.error(`[Messenger] ⚠️ Error subscribing webhook for page ${pageId}:`, subErr);
-        }
+        // 👉 تفعيل الـ Webhook للصفحة
+        await subscribePageWebhook(pageId, accessToken, pageName);
 
         res.json({ success: true, message: `تم ربط صفحة "${pageName}" بنجاح!`, page });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
+    }
+}
+
+// ربط صفحات باستخدام System User Token أو Page Access Token دائم
+export async function connectWithSystemToken(req, res) {
+    try {
+        const { accessToken } = req.body;
+        if (!accessToken || !accessToken.trim()) {
+            return res.status(400).json({ success: false, message: 'يرجى إدخال رمز الوصول (Access Token)' });
+        }
+
+        const token = accessToken.trim();
+        const userId = req.user.id;
+        const savedPages = [];
+
+        // 1. فحص هل هو System User / User Token فيه صفحات (/me/accounts)
+        let accountsRes = await fetch(
+            `https://graph.facebook.com/v18.0/me/accounts?access_token=${token}&fields=id,name,access_token,instagram_business_account{id,username}`
+        );
+        let accountsData = await accountsRes.json();
+
+        if (accountsData.data && accountsData.data.length > 0) {
+            for (const page of accountsData.data) {
+                const igAccount = page.instagram_business_account;
+                const igId = igAccount ? igAccount.id : null;
+                const igUsername = igAccount ? igAccount.username : null;
+                const pageToken = page.access_token || token;
+
+                const [record, created] = await MessengerPage.findOrCreate({
+                    where: { pageId: page.id },
+                    defaults: {
+                        UserId: userId,
+                        pageId: page.id,
+                        pageName: page.name,
+                        accessToken: pageToken,
+                        instagramId: igId,
+                        instagramUsername: igUsername,
+                        isSystemUser: true,
+                        isActive: true
+                    }
+                });
+
+                if (!created) {
+                    const updateData = {
+                        pageName: page.name,
+                        accessToken: pageToken,
+                        UserId: userId,
+                        isSystemUser: true,
+                        isActive: true
+                    };
+                    if (igId) updateData.instagramId = igId;
+                    if (igUsername) updateData.instagramUsername = igUsername;
+                    await record.update(updateData);
+                }
+
+                await subscribePageWebhook(page.id, pageToken, page.name);
+                savedPages.push(page.name);
+            }
+
+            return res.json({
+                success: true,
+                message: `✅ تم ربط ${savedPages.length} صفحة بنجاح بتوكن دائم: (${savedPages.join(', ')})`,
+                count: savedPages.length
+            });
+        }
+
+        // 2. فحص هل هو Page Access Token مباشر (/me)
+        let meRes = await fetch(
+            `https://graph.facebook.com/v18.0/me?access_token=${token}&fields=id,name,instagram_business_account{id,username}`
+        );
+        let meData = await meRes.json();
+
+        if (meData.id && meData.name) {
+            const igAccount = meData.instagram_business_account;
+            const igId = igAccount ? igAccount.id : null;
+            const igUsername = igAccount ? igAccount.username : null;
+
+            const [record, created] = await MessengerPage.findOrCreate({
+                where: { pageId: meData.id },
+                defaults: {
+                    UserId: userId,
+                    pageId: meData.id,
+                    pageName: meData.name,
+                    accessToken: token,
+                    instagramId: igId,
+                    instagramUsername: igUsername,
+                    isSystemUser: true,
+                    isActive: true
+                }
+            });
+
+            if (!created) {
+                const updateData = {
+                    pageName: meData.name,
+                    accessToken: token,
+                    UserId: userId,
+                    isSystemUser: true,
+                    isActive: true
+                };
+                if (igId) updateData.instagramId = igId;
+                if (igUsername) updateData.instagramUsername = igUsername;
+                await record.update(updateData);
+            }
+
+            await subscribePageWebhook(meData.id, token, meData.name);
+
+            return res.json({
+                success: true,
+                message: `✅ تم ربط صفحة "${meData.name}" بنجاح بتوكن دائم!`,
+                page: meData
+            });
+        }
+
+        // في حال فشل الاستجابتين
+        const errMsg = accountsData.error?.message || meData.error?.message || 'التوكن غير صالح أو تنقصه الصلاحيات المطلوبة.';
+        return res.status(400).json({
+            success: false,
+            message: `❌ خطأ من فيسبوك: ${errMsg}`
+        });
+
+    } catch (err) {
+        console.error('[System User Connect] Error:', err);
+        return res.status(500).json({ success: false, message: 'حدث خطأ أثناء معالجة التوكن: ' + err.message });
     }
 }
 

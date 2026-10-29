@@ -157,6 +157,9 @@ const PORT = process.env.PORT || 3005;
 // Database Sync
 sequelize.sync().then(async () => {
     console.log('Database synced (with alter)');
+    try {
+        await sequelize.query('ALTER TABLE messenger_pages ADD COLUMN isSystemUser BOOLEAN DEFAULT false;');
+    } catch (e) {}
 
     // Create Super Admin if not exists
     const adminExists = await User.findOne({ where: { role: 'super_admin' } });
