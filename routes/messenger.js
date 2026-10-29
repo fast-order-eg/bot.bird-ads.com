@@ -5,6 +5,7 @@ import {
     getPages,
     connectPage,
     connectWithSystemToken,
+    getSavedSystemToken,
     syncSystemPages,
     disconnectPage,
     getConversations,
@@ -51,6 +52,10 @@ router.post('/api/messenger/connect-system-token', (req, res) => {
 router.post('/api/messenger/sync-pages', (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ success: false });
     return syncSystemPages(req, res);
+});
+router.get('/api/messenger/saved-token', (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ success: false });
+    return getSavedSystemToken(req, res);
 });
 router.delete('/api/messenger/page/:pageId', (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ success: false });

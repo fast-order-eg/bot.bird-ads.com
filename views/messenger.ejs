@@ -225,6 +225,7 @@
                             <li>السيستم هيسحب الصفحة وحساب الإنستجرام ويفعل الـ Webhook تلقائياً.</li>
                         </ul>
                     </div>
+                    <div id="system-token-saved-notice" class="alert alert-success py-2 px-3 small border-0 mb-3" style="display:none; background: rgba(25, 135, 84, 0.15); border: 1px solid rgba(25, 135, 84, 0.3) !important; color: #75b798;"></div>
                     <label class="text-white small mb-1 fw-bold">رمز الوصول (Access Token):</label>
                     <textarea id="system-user-token-input" class="form-control bg-dark text-white border-secondary" rows="4" placeholder="EAAB... الصق التوكن هنا"></textarea>
                     
@@ -269,10 +270,26 @@
             }
         }
 
-        function openSystemUserModal() {
-            document.getElementById('system-user-token-input').value = '';
+        async function openSystemUserModal() {
             document.getElementById('system-token-loading').style.display = 'none';
             document.getElementById('btn-submit-system-token').disabled = false;
+            const tokenInput = document.getElementById('system-user-token-input');
+            const tokenNotice = document.getElementById('system-token-saved-notice');
+            if (tokenNotice) tokenNotice.style.display = 'none';
+
+            try {
+                const res = await fetch('/api/messenger/saved-token');
+                const data = await res.json();
+                if (data.success && data.hasToken) {
+                    tokenInput.value = data.token;
+                    if (tokenNotice) {
+                        tokenNotice.innerHTML = `💾 <strong>يوجد توكن دائم محفوظ في حسابك (${data.maskedToken})</strong>. تم وضعه تلقائياً، يمكنك الضغط على "ربط وتفعيل الآن" مباشرة دون كتابته مجدداً.`;
+                        tokenNotice.style.display = 'block';
+                    }
+                } else {
+                    tokenInput.value = '';
+                }
+            } catch (e) {}
         }
 
         async function submitSystemUserToken() {

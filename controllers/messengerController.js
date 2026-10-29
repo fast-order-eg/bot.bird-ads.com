@@ -859,6 +859,50 @@ export async function connectPage(req, res) {
     }
 }
 
+
+function parseUserSettings(userRec) {
+    if (!userRec || !userRec.settings) return {};
+    if (typeof userRec.settings === 'object') return { ...userRec.settings };
+    if (typeof userRec.settings === 'string') {
+        try {
+            return JSON.parse(userRec.settings);
+        } catch (e) {
+            return {};
+        }
+    }
+    return {};
+}
+
+async function saveUserSetting(userRec, key, value) {
+    if (!userRec) return;
+    const settings = parseUserSettings(userRec);
+    settings[key] = value;
+    await userRec.update({ settings });
+}
+
+// الحصول على التوكن المحفوظ لمستخدم النظام
+export async function getSavedSystemToken(req, res) {
+    try {
+        const userRec = await User.findByPk(req.user.id);
+        const settings = parseUserSettings(userRec);
+        let token = settings.systemUserToken || '';
+        if (!token) {
+            const p = await MessengerPage.findOne({ where: { UserId: req.user.id, isSystemUser: true } });
+            if (p && p.accessToken) token = p.accessToken;
+            else token = 'EAAGpjUD5m1cBSPqtXiZCVg1LZCIezNBS9mi9R0UIgdzT8JGBIVIvUHoG2wMUD3ytFI16BofhgZC8TTuYWLZBzTCZAxNUGFBI7vZApQera8V5pOEjhzzazVf92RZChOcQZA8N730CJ3vsy7pGt1ETqixKAr507pZBy3mjCO5eRKK4bnZByiMwcZCDVIDWYU8wI0K3AFgRAZDZD';
+            if (token && userRec) await saveUserSetting(userRec, 'systemUserToken', token);
+        }
+        res.json({
+            success: true,
+            hasToken: Boolean(token),
+            token: token || '',
+            maskedToken: token ? `${token.substring(0, 8)}...${token.substring(token.length - 6)}` : ''
+        });
+    } catch (e) {
+        res.status(500).json({ success: false, message: e.message });
+    }
+}
+
 // ربط صفحات باستخدام System User Token أو Page Access Token دائم
 export async function connectWithSystemToken(req, res) {
     try {
@@ -869,6 +913,7 @@ export async function connectWithSystemToken(req, res) {
 
         const token = accessToken.trim();
         const userId = req.user.id;
+        const userRec = await User.findByPk(userId);
         const savedPages = [];
 
         // 1. فحص هل هو System User / User Token فيه صفحات (/me/accounts)
@@ -913,17 +958,10 @@ export async function connectWithSystemToken(req, res) {
 
                 await subscribePageWebhook(page.id, pageToken, page.name);
                 savedPages.push(page.name);
-            // حفظ التوكن في إعدادات المستخدم لعدم الحاجة لإعادة كتابته
-            try {
-                const userRec = await User.findByPk(userId);
-                if (userRec) {
-                    const uSettings = userRec.settings || {};
-                    uSettings.systemUserToken = token;
-                    await userRec.update({ settings: uSettings });
-                }
-            } catch(e) {}
-
             }
+
+            // حفظ التوكن بأمان في إعدادات المستخدم
+            await saveUserSetting(userRec, 'systemUserToken', token);
 
             return res.json({
                 success: true,
@@ -939,7 +977,6 @@ export async function connectWithSystemToken(req, res) {
         let meData = await meRes.json();
 
         if (meData.id && meData.name) {
-            // نتحقق هل المعرف هذا صفحة فيسبوك
             let pageCheckRes = await fetch(
                 `https://graph.facebook.com/v18.0/${meData.id}?access_token=${token}&fields=category,instagram_business_account{id,username}`
             );
@@ -979,6 +1016,7 @@ export async function connectWithSystemToken(req, res) {
                 }
 
                 await subscribePageWebhook(meData.id, token, meData.name);
+                await saveUserSetting(userRec, 'systemUserToken', token);
 
                 return res.json({
                     success: true,
@@ -994,7 +1032,6 @@ export async function connectWithSystemToken(req, res) {
             });
         }
 
-        // في حال فشل الاستجابتين
         const errMsg = accountsData.error?.message || meData.error?.message || 'التوكن غير صالح أو تنقصه الصلاحيات المطلوبة.';
         return res.status(400).json({
             success: false,
@@ -1012,7 +1049,8 @@ export async function syncSystemPages(req, res) {
     try {
         const userId = req.user.id;
         const userRec = await User.findByPk(userId);
-        let token = userRec?.settings?.systemUserToken;
+        const userSettings = parseUserSettings(userRec);
+        let token = userSettings.systemUserToken;
 
         // إذا لم يكن مخزناً في settings، نجلب التوكن من صفحة قديمة أو التوكن الثابت
         if (!token) {
@@ -1022,11 +1060,7 @@ export async function syncSystemPages(req, res) {
             } else {
                 token = 'EAAGpjUD5m1cBSPqtXiZCVg1LZCIezNBS9mi9R0UIgdzT8JGBIVIvUHoG2wMUD3ytFI16BofhgZC8TTuYWLZBzTCZAxNUGFBI7vZApQera8V5pOEjhzzazVf92RZChOcQZA8N730CJ3vsy7pGt1ETqixKAr507pZBy3mjCO5eRKK4bnZByiMwcZCDVIDWYU8wI0K3AFgRAZDZD';
             }
-            if (userRec) {
-                const uSettings = userRec.settings || {};
-                uSettings.systemUserToken = token;
-                await userRec.update({ settings: uSettings });
-            }
+            await saveUserSetting(userRec, 'systemUserToken', token);
         }
 
         const accountsRes = await fetch(
@@ -1041,10 +1075,12 @@ export async function syncSystemPages(req, res) {
             });
         }
 
-        const syncedPages = [];
-        let newCount = 0;
+        const allPages = [];
+        const newPages = [];
+        const existingPages = [];
 
         for (const page of accountsData.data) {
+            allPages.push(page.name);
             const igAccount = page.instagram_business_account;
             const igId = igAccount ? igAccount.id : null;
             const igUsername = igAccount ? igAccount.username : null;
@@ -1065,8 +1101,9 @@ export async function syncSystemPages(req, res) {
             });
 
             if (created) {
-                newCount++;
+                newPages.push(page.name);
             } else {
+                existingPages.push(page.name);
                 const updateData = {
                     pageName: page.name,
                     accessToken: pageToken,
@@ -1080,15 +1117,24 @@ export async function syncSystemPages(req, res) {
             }
 
             await subscribePageWebhook(page.id, pageToken, page.name);
-            syncedPages.push(page.name);
+        }
+
+        // صياغة رسالة واضحة جداً ودقيقة للمستخدم
+        let replyMsg = '';
+        if (newPages.length > 0) {
+            replyMsg = `✅ تمت المزامنة بنجاح! تم إضافة ${newPages.length} صفحة جديدة: (${newPages.join('، ')})، وإجمالي الصفحات المربوطة حالياً ${allPages.length}: (${allPages.join('، ')}).`;
+        } else {
+            replyMsg = `✅ جميع الصفحات (${allPages.length}) مضافة ومحدثة بالفعل: (${allPages.join('، ')}). لا توجد صفحات جديدة مسندة في مدير الأعمال.`;
         }
 
         return res.json({
             success: true,
-            message: `✅ تمت المزامنة بنجاح! تم تحديث ${syncedPages.length} صفحة (${newCount > 0 ? `منها ${newCount} صفحة جديدة` : 'جميعها محدثة'}): ${syncedPages.join('، ')}`,
-            count: syncedPages.length,
-            newCount,
-            pages: syncedPages
+            message: replyMsg,
+            count: allPages.length,
+            newCount: newPages.length,
+            newPages,
+            existingPages,
+            pages: allPages
         });
 
     } catch (err) {
