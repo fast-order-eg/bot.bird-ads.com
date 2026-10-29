@@ -922,14 +922,20 @@ export async function connectWithSystemToken(req, res) {
             });
         }
 
-        // 2. فحص هل هو Page Access Token مباشر (/me)
+        // 2. إذا لم يكن هناك صفحات في /me/accounts، نفحص طبيعة التوكن عبر /me
         let meRes = await fetch(
-            `https://graph.facebook.com/v18.0/me?access_token=${token}&fields=id,name,instagram_business_account{id,username}`
+            `https://graph.facebook.com/v18.0/me?access_token=${token}&fields=id,name,category`
         );
         let meData = await meRes.json();
 
-        if (meData.id && meData.name) {
-            const igAccount = meData.instagram_business_account;
+        // لو كان التوكن يخص صفحة مباشرة (Pages have category)
+        if (meData.id && meData.category) {
+            // جلب إنستجرام المرتبط بالصفحة
+            let igRes = await fetch(
+                `https://graph.facebook.com/v18.0/${meData.id}?access_token=${token}&fields=instagram_business_account{id,username}`
+            );
+            let igData = await igRes.json();
+            const igAccount = igData.instagram_business_account;
             const igId = igAccount ? igAccount.id : null;
             const igUsername = igAccount ? igAccount.username : null;
 
@@ -969,6 +975,14 @@ export async function connectWithSystemToken(req, res) {
             });
         }
 
+        // لو كان التوكن لمستخدم نظام لكن لا توجد صفحات مسندة له
+        if (meData.id && meData.name) {
+            return res.status(400).json({
+                success: false,
+                message: `⚠️ التوكن يتبع مستخدم النظام (${meData.name}) بنجاح، ولكن لا توجد أي صفحات فيسبوك مسندة إليه حتى الآن في مدير الأعمال! يرجى إسناد الصفحة له أولاً.`
+            });
+        }
+
         // في حال فشل الاستجابتين
         const errMsg = accountsData.error?.message || meData.error?.message || 'التوكن غير صالح أو تنقصه الصلاحيات المطلوبة.';
         return res.status(400).json({
@@ -982,7 +996,6 @@ export async function connectWithSystemToken(req, res) {
     }
 }
 
-// حذف ربط صفحة
 export async function disconnectPage(req, res) {
     try {
         const { pageId } = req.params;
