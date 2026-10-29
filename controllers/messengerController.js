@@ -922,64 +922,65 @@ export async function connectWithSystemToken(req, res) {
             });
         }
 
-        // 2. إذا لم يكن هناك صفحات في /me/accounts، نفحص طبيعة التوكن عبر /me
+        // 2. إذا لم يكن هناك صفحات في /me/accounts، نستعلم عن هوية صاحب التوكن بحقول أساسية فقط (id, name)
         let meRes = await fetch(
-            `https://graph.facebook.com/v18.0/me?access_token=${token}&fields=id,name,category`
+            `https://graph.facebook.com/v18.0/me?access_token=${token}&fields=id,name`
         );
         let meData = await meRes.json();
 
-        // لو كان التوكن يخص صفحة مباشرة (Pages have category)
-        if (meData.id && meData.category) {
-            // جلب إنستجرام المرتبط بالصفحة
-            let igRes = await fetch(
-                `https://graph.facebook.com/v18.0/${meData.id}?access_token=${token}&fields=instagram_business_account{id,username}`
+        if (meData.id && meData.name) {
+            // نتحقق هل المعرف هذا صفحة فيسبوك
+            let pageCheckRes = await fetch(
+                `https://graph.facebook.com/v18.0/${meData.id}?access_token=${token}&fields=category,instagram_business_account{id,username}`
             );
-            let igData = await igRes.json();
-            const igAccount = igData.instagram_business_account;
-            const igId = igAccount ? igAccount.id : null;
-            const igUsername = igAccount ? igAccount.username : null;
+            let pageCheckData = await pageCheckRes.json();
 
-            const [record, created] = await MessengerPage.findOrCreate({
-                where: { pageId: meData.id },
-                defaults: {
-                    UserId: userId,
-                    pageId: meData.id,
-                    pageName: meData.name,
-                    accessToken: token,
-                    instagramId: igId,
-                    instagramUsername: igUsername,
-                    isSystemUser: true,
-                    isActive: true
+            // إذا كان صفحة (لها category)
+            if (pageCheckData.category) {
+                const igAccount = pageCheckData.instagram_business_account;
+                const igId = igAccount ? igAccount.id : null;
+                const igUsername = igAccount ? igAccount.username : null;
+
+                const [record, created] = await MessengerPage.findOrCreate({
+                    where: { pageId: meData.id },
+                    defaults: {
+                        UserId: userId,
+                        pageId: meData.id,
+                        pageName: meData.name,
+                        accessToken: token,
+                        instagramId: igId,
+                        instagramUsername: igUsername,
+                        isSystemUser: true,
+                        isActive: true
+                    }
+                });
+
+                if (!created) {
+                    const updateData = {
+                        pageName: meData.name,
+                        accessToken: token,
+                        UserId: userId,
+                        isSystemUser: true,
+                        isActive: true
+                    };
+                    if (igId) updateData.instagramId = igId;
+                    if (igUsername) updateData.instagramUsername = igUsername;
+                    await record.update(updateData);
                 }
-            });
 
-            if (!created) {
-                const updateData = {
-                    pageName: meData.name,
-                    accessToken: token,
-                    UserId: userId,
-                    isSystemUser: true,
-                    isActive: true
-                };
-                if (igId) updateData.instagramId = igId;
-                if (igUsername) updateData.instagramUsername = igUsername;
-                await record.update(updateData);
+                await subscribePageWebhook(meData.id, token, meData.name);
+
+                return res.json({
+                    success: true,
+                    message: `✅ تم ربط صفحة "${meData.name}" بنجاح بتوكن دائم!`,
+                    page: meData
+                });
             }
 
-            await subscribePageWebhook(meData.id, token, meData.name);
-
-            return res.json({
-                success: true,
-                message: `✅ تم ربط صفحة "${meData.name}" بنجاح بتوكن دائم!`,
-                page: meData
-            });
-        }
-
-        // لو كان التوكن لمستخدم نظام لكن لا توجد صفحات مسندة له
-        if (meData.id && meData.name) {
+            // إذا لم يكن صفحة، فهو مستخدم نظام (System User) مثل Rady ولكن لم يتم إسناد أي صفحات له بعد
             return res.status(400).json({
                 success: false,
-                message: `⚠️ التوكن يتبع مستخدم النظام (${meData.name}) بنجاح، ولكن لا توجد أي صفحات فيسبوك مسندة إليه حتى الآن في مدير الأعمال! يرجى إسناد الصفحة له أولاً.`
+                message: `⚠️ التوكن سليم ويتبع مستخدم النظام (${meData.name})، ولكن لا توجد أي صفحات مسندة له حالياً في مدير الأعمال! يرجى إسناد الصفحة لـ ${meData.name} أولاً من إعدادات الأعمال.`
             });
         }
 
