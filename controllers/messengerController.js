@@ -913,6 +913,16 @@ export async function connectWithSystemToken(req, res) {
 
                 await subscribePageWebhook(page.id, pageToken, page.name);
                 savedPages.push(page.name);
+            // حفظ التوكن في إعدادات المستخدم لعدم الحاجة لإعادة كتابته
+            try {
+                const userRec = await User.findByPk(userId);
+                if (userRec) {
+                    const uSettings = userRec.settings || {};
+                    uSettings.systemUserToken = token;
+                    await userRec.update({ settings: uSettings });
+                }
+            } catch(e) {}
+
             }
 
             return res.json({
@@ -996,6 +1006,97 @@ export async function connectWithSystemToken(req, res) {
         return res.status(500).json({ success: false, message: 'حدث خطأ أثناء معالجة التوكن: ' + err.message });
     }
 }
+
+// مزامنة الصفحات المسندة لمستخدم النظام تلقائياً بالتوكن المحفوظ
+export async function syncSystemPages(req, res) {
+    try {
+        const userId = req.user.id;
+        const userRec = await User.findByPk(userId);
+        let token = userRec?.settings?.systemUserToken;
+
+        // إذا لم يكن مخزناً في settings، نجلب التوكن من صفحة قديمة أو التوكن الثابت
+        if (!token) {
+            const pageWithToken = await MessengerPage.findOne({ where: { UserId: userId, isSystemUser: true } });
+            if (pageWithToken && pageWithToken.accessToken) {
+                token = pageWithToken.accessToken;
+            } else {
+                token = 'EAAGpjUD5m1cBSPqtXiZCVg1LZCIezNBS9mi9R0UIgdzT8JGBIVIvUHoG2wMUD3ytFI16BofhgZC8TTuYWLZBzTCZAxNUGFBI7vZApQera8V5pOEjhzzazVf92RZChOcQZA8N730CJ3vsy7pGt1ETqixKAr507pZBy3mjCO5eRKK4bnZByiMwcZCDVIDWYU8wI0K3AFgRAZDZD';
+            }
+            if (userRec) {
+                const uSettings = userRec.settings || {};
+                uSettings.systemUserToken = token;
+                await userRec.update({ settings: uSettings });
+            }
+        }
+
+        const accountsRes = await fetch(
+            `https://graph.facebook.com/v18.0/me/accounts?access_token=${token}&fields=id,name,access_token,instagram_business_account{id,username}`
+        );
+        const accountsData = await accountsRes.json();
+
+        if (!accountsData.data || accountsData.data.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'لم يتم العثور على أي صفحات مسندة لمستخدم النظام حالياً. تأكد من إسناد الصفحة له في مدير الأعمال أولاً.'
+            });
+        }
+
+        const syncedPages = [];
+        let newCount = 0;
+
+        for (const page of accountsData.data) {
+            const igAccount = page.instagram_business_account;
+            const igId = igAccount ? igAccount.id : null;
+            const igUsername = igAccount ? igAccount.username : null;
+            const pageToken = page.access_token || token;
+
+            const [record, created] = await MessengerPage.findOrCreate({
+                where: { pageId: page.id },
+                defaults: {
+                    UserId: userId,
+                    pageId: page.id,
+                    pageName: page.name,
+                    accessToken: pageToken,
+                    instagramId: igId,
+                    instagramUsername: igUsername,
+                    isSystemUser: true,
+                    isActive: true
+                }
+            });
+
+            if (created) {
+                newCount++;
+            } else {
+                const updateData = {
+                    pageName: page.name,
+                    accessToken: pageToken,
+                    UserId: userId,
+                    isSystemUser: true,
+                    isActive: true
+                };
+                if (igId) updateData.instagramId = igId;
+                if (igUsername) updateData.instagramUsername = igUsername;
+                await record.update(updateData);
+            }
+
+            await subscribePageWebhook(page.id, pageToken, page.name);
+            syncedPages.push(page.name);
+        }
+
+        return res.json({
+            success: true,
+            message: `✅ تمت المزامنة بنجاح! تم تحديث ${syncedPages.length} صفحة (${newCount > 0 ? `منها ${newCount} صفحة جديدة` : 'جميعها محدثة'}): ${syncedPages.join('، ')}`,
+            count: syncedPages.length,
+            newCount,
+            pages: syncedPages
+        });
+
+    } catch (err) {
+        console.error('[Sync System Pages] Error:', err);
+        return res.status(500).json({ success: false, message: 'حدث خطأ أثناء المزامنة: ' + err.message });
+    }
+}
+
 
 export async function disconnectPage(req, res) {
     try {
