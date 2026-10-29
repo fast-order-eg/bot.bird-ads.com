@@ -242,6 +242,42 @@
         </div>
     </div>
 
+    <!-- Modal: إضافة حساب إضافي بالتوكن للصفحة -->
+    <div class="modal fade" id="addAccountModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content glass-card border-secondary">
+                <div class="modal-header border-secondary border-opacity-25">
+                    <h5 class="modal-title text-white d-flex align-items-center gap-2">
+                        <span>➕</span> إضافة حساب أدمن إضافي للصفحة
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-white-50 small mb-2">
+                        إضافة حساب مسؤول إضافي لصفحة: <strong id="manual-account-page-name" class="text-info"></strong>
+                    </p>
+                    <div class="p-3 mb-3 rounded-3" style="background: rgba(13, 202, 240, 0.08); border: 1px solid rgba(13, 202, 240, 0.2);">
+                        <div class="text-info fw-bold small mb-1">💡 ميزة توزيع الردود:</div>
+                        <ul class="text-white-50 small mb-0 ps-3">
+                            <li>البوت هيوزع الردود بالتساوي (Round-Robin) على جميع الحسابات المربوطة.</li>
+                            <li>لو حساب اتقفل سيلفي، السيستم هيبدل تلقائياً على باقي الحسابات بدون أي توقف.</li>
+                        </ul>
+                    </div>
+                    <label class="text-white small mb-1 fw-bold">رمز الوصول (Page Access Token):</label>
+                    <textarea id="manual-account-token" class="form-control bg-dark text-white border-secondary mb-3" rows="4" placeholder="EAAB... الصق توكن الأدمن الإضافي هنا"></textarea>
+                    <input type="hidden" id="manual-account-pageId">
+                    <div class="alert alert-primary py-2 px-3 small border-0 mb-0" style="background: rgba(8, 102, 255, 0.15); color: #8bb9fe;">
+                        ℹ️ <strong>ملاحظة:</strong> يمكنك أيضاً تبديل حسابك في الفيسبوك والضغط على زر <strong>"تسجيل الدخول بالفيسبوك"</strong> وسيتم ربط الحساب الجديد تلقائياً بنفس الصفحة!
+                    </div>
+                </div>
+                <div class="modal-footer border-secondary border-opacity-25">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="button" class="btn btn-primary fw-bold px-4" id="btn-submit-manual-account" onclick="submitManualAccount()">حفظ وربط الحساب</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         
@@ -415,6 +451,69 @@
                     } catch(e){}
                 }
 
+                // معالجة حسابات الأدمن المسؤولة عن الرد
+                const accounts = page.accounts || [];
+                const accountsCount = accounts.length;
+
+                let accountsHtml = '';
+                if (accountsCount === 0) {
+                    accountsHtml = `
+                        <div class="text-white-50 small p-2 text-center rounded w-100" style="background: rgba(0,0,0,0.2);">
+                            ⚠️ لا يوجد حسابات أدمن مربوطة لهذا الحساب حالياً
+                        </div>
+                    `;
+                } else {
+                    accountsHtml = accounts.map(acc => {
+                        let statusBadge = '';
+                        let borderClass = 'border-secondary';
+                        if (!acc.isActive || acc.status === 'paused') {
+                            statusBadge = '<span class="badge bg-secondary" style="font-size:0.6rem;">⏸️ موقوف</span>';
+                            borderClass = 'border-secondary';
+                        } else if (acc.status === 'checkpoint') {
+                            statusBadge = '<span class="badge bg-danger" style="font-size:0.6rem;">🔴 مقفول سيلفي / تأكيد</span>';
+                            borderClass = 'border-danger';
+                        } else if (acc.status === 'error') {
+                            statusBadge = '<span class="badge bg-warning text-dark" style="font-size:0.6rem;">⚠️ منتهي / خطأ</span>';
+                            borderClass = 'border-warning';
+                        } else {
+                            statusBadge = '<span class="badge bg-success" style="font-size:0.6rem;">🟢 شغال</span>';
+                            borderClass = 'border-success';
+                        }
+
+                        const pic = acc.fbUserPicture || 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
+                        const isSys = acc.isSystemUser;
+                        const safeAccName = encodeURIComponent(acc.fbUserName);
+
+                        return `
+                        <div class="d-flex align-items-center justify-content-between p-2 rounded gap-2 ${borderClass}" style="background: rgba(0,0,0,0.35); border: 1px solid; flex: 1 1 calc(50% - 0.5rem); min-width: 240px;">
+                            <div class="d-flex align-items-center gap-2">
+                                <img src="${pic}" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 2px solid ${acc.status === 'checkpoint' ? '#dc3545' : (acc.isActive ? '#198754' : '#6c757d')};">
+                                <div style="line-height: 1.2;">
+                                    <div class="text-white small fw-bold text-truncate" style="max-width: 130px;" title="${acc.fbUserName}">
+                                        ${acc.fbUserName}
+                                    </div>
+                                    <div class="d-flex align-items-center gap-1 mt-1">
+                                        ${statusBadge}
+                                        ${isSys ? '<span class="badge bg-info text-dark" style="font-size:0.55rem;">⚡ دائم</span>' : ''}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-center gap-1">
+                                <button class="btn btn-xs btn-outline-info p-1 px-2" style="border-radius:6px;" title="فحص حالة الرمز الآن" onclick="checkAccountStatus(${acc.id}, this)">
+                                    🔄
+                                </button>
+                                <button class="btn btn-xs ${acc.isActive ? 'btn-outline-warning' : 'btn-outline-success'} p-1 px-2" style="border-radius:6px;" title="${acc.isActive ? 'إيقاف مؤقت' : 'تفعيل'}" onclick="toggleAccount(${acc.id})">
+                                    ${acc.isActive ? '⏸️' : '▶️'}
+                                </button>
+                                <button class="btn btn-xs btn-outline-danger p-1 px-2" style="border-radius:6px;" title="إزالة هذا الحساب" onclick="deleteAccount(${acc.id}, '${safeAccName}')">
+                                    🗑️
+                                </button>
+                            </div>
+                        </div>
+                        `;
+                    }).join('');
+                }
+
                 return `
                 <div class="page-card p-3 mb-3 d-flex flex-column gap-2">
                     <div class="d-flex align-items-start justify-content-between">
@@ -439,6 +538,28 @@
                             ${page.isSystemUser ? '<span class="badge bg-info text-dark" style="font-size:0.65rem;" title="توكن دائم من مستخدم النظام">⚡ دائم</span>' : ''}
                             <span class="badge ${page.isActive ? 'bg-success' : 'bg-secondary'}">${page.isActive ? 'نشطة' : 'غير نشطة'}</span>
                             <button class="btn btn-sm btn-outline-danger rounded-pill" onclick="disconnectPage('${page.pageId}')">حذف</button>
+                        </div>
+                    </div>
+
+                    <!-- قسم حسابات الأدمن المسؤولة عن الرد -->
+                    <div class="p-2 rounded" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);">
+                        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="text-white small fw-bold">👥 الأدمن المسؤولين عن الرد (${accountsCount}):</span>
+                                ${accountsCount > 1 ? '<span class="badge bg-success bg-opacity-75" style="font-size:0.65rem;">🔄 توزيع متساوي (Round-Robin)</span>' : '<span class="badge bg-secondary" style="font-size:0.65rem;">حساب فردي</span>'}
+                            </div>
+                            <div class="d-flex gap-1">
+                                <button class="btn btn-xs btn-outline-info d-flex align-items-center gap-1 py-1 px-2" style="font-size:0.75rem; border-radius:6px;" onclick="openAddAccountModal('${page.pageId}', '${encodeURIComponent(page.pageName)}')">
+                                    ➕ إضافة بالتوكن
+                                </button>
+                                <a href="/auth/facebook/messenger" class="btn btn-xs btn-outline-primary d-flex align-items-center gap-1 py-1 px-2" style="font-size:0.75rem; border-radius:6px;" title="قم بتبديل حسابك في الفيسبوك أولاً ثم اضغط هنا">
+                                    <svg width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M16 8.049c0-4.446-3.582-8.05-8-8.05C3.58 0-.002 3.603-.002 8.05c0 4.017 2.926 7.347 6.75 7.951v-5.625h-2.03V8.05H6.75V6.275c0-2.017 1.195-3.131 3.022-3.131.876 0 1.791.157 1.791.157v1.98h-1.009c-.993 0-1.303.621-1.303 1.258v1.51h2.218l-.354 2.375H9.25V16c3.824-.604 6.75-3.934 6.75-7.951z"/></svg>
+                                    ربط فيسبوك آخر
+                                </a>
+                            </div>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2">
+                            ${accountsHtml}
                         </div>
                     </div>
 
@@ -665,6 +786,102 @@
             const data = await res.json();
             if (data.success) { showToast(data.message); loadPages(); }
             else showToast(data.message, 'danger');
+        }
+
+        // ==========================================
+        // دوال إدارة حسابات الأدمن المتعددة في الواجهة
+        // ==========================================
+
+        async function checkAccountStatus(accountId, btn) {
+            const origHtml = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm" style="width:10px;height:10px;"></span>';
+            btn.disabled = true;
+            try {
+                const res = await fetch(`/api/messenger/account/${accountId}/check`, { method: 'POST' });
+                const data = await res.json();
+                showToast(data.message, data.success ? 'success' : 'danger');
+                loadPages();
+            } catch (e) {
+                showToast('فشل فحص الحساب', 'danger');
+            } finally {
+                btn.innerHTML = origHtml;
+                btn.disabled = false;
+            }
+        }
+
+        async function toggleAccount(accountId) {
+            try {
+                const res = await fetch(`/api/messenger/account/${accountId}/toggle`, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    loadPages();
+                } else {
+                    showToast(data.message || 'حدث خطأ', 'danger');
+                }
+            } catch (e) {
+                showToast('حدث خطأ أثناء تعديل حالة الحساب', 'danger');
+            }
+        }
+
+        async function deleteAccount(accountId, safeName) {
+            const name = decodeURIComponent(safeName);
+            if (!confirm(`هل أنت متأكد من حذف الحساب "${name}" من قائمة الردود لهذه الصفحة؟`)) return;
+            try {
+                const res = await fetch(`/api/messenger/account/${accountId}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    loadPages();
+                } else {
+                    showToast(data.message || 'حدث خطأ أثناء الحذف', 'danger');
+                }
+            } catch (e) {
+                showToast('حدث خطأ أثناء حذف الحساب', 'danger');
+            }
+        }
+
+        let addAccountModalInstance = null;
+        function openAddAccountModal(pageId, safePageName) {
+            document.getElementById('manual-account-pageId').value = pageId;
+            document.getElementById('manual-account-token').value = '';
+            document.getElementById('manual-account-page-name').innerText = decodeURIComponent(safePageName);
+            if (!addAccountModalInstance) {
+                addAccountModalInstance = new bootstrap.Modal(document.getElementById('addAccountModal'));
+            }
+            addAccountModalInstance.show();
+        }
+
+        async function submitManualAccount() {
+            const pageId = document.getElementById('manual-account-pageId').value;
+            const accessToken = document.getElementById('manual-account-token').value.trim();
+            if (!accessToken) return showToast('يرجى إدخال رمز الوصول (Token)', 'danger');
+
+            const btn = document.getElementById('btn-submit-manual-account');
+            const origText = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> جاري التحقق...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(`/api/messenger/page/${pageId}/add-account`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ accessToken })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    if (addAccountModalInstance) addAccountModalInstance.hide();
+                    loadPages();
+                } else {
+                    showToast(data.message || 'فشل إضافة الحساب', 'danger');
+                }
+            } catch (e) {
+                showToast('حدث خطأ أثناء إضافة الحساب', 'danger');
+            } finally {
+                btn.innerHTML = origText;
+                btn.disabled = false;
+            }
         }
     </script>
 </body>

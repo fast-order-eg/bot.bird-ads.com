@@ -14,7 +14,11 @@ import {
     handleFacebookCallback,
     updatePageComment,
     updatePageSettings,
-    disconnectAllPages
+    disconnectAllPages,
+    togglePageAccount,
+    deletePageAccount,
+    checkPageAccountStatus,
+    addPageAccountManual
 } from '../controllers/messengerController.js';
 
 const router = express.Router();
@@ -82,6 +86,27 @@ router.get('/api/messenger/conversations/:pageId', (req, res) => {
 router.get('/api/messenger/summary/:conversationId', (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ success: false });
     return getSummary(req, res);
+});
+
+// ====== إدارة حسابات الأدمن المتعددة لكل صفحة ======
+router.post('/api/messenger/account/:accountId/toggle', (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ success: false });
+    return togglePageAccount(req, res);
+});
+
+router.delete('/api/messenger/account/:accountId', (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ success: false });
+    return deletePageAccount(req, res);
+});
+
+router.post('/api/messenger/account/:accountId/check', (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ success: false });
+    return checkPageAccountStatus(req, res);
+});
+
+router.post('/api/messenger/page/:pageId/add-account', (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ success: false });
+    return addPageAccountManual(req, res);
 });
 
 export default router;

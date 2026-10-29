@@ -3,6 +3,7 @@ import { CONFIG } from '../config.js';
 import User from '../models/User.js';
 import Instruction from '../models/Instruction.js';
 import MessengerPage from '../models/MessengerPage.js';
+import MessengerPageAccount from '../models/MessengerPageAccount.js';
 import MessengerConversation from '../models/MessengerConversation.js';
 import Message from '../models/Message.js';
 import { GoogleAuth } from 'google-auth-library';
@@ -111,6 +112,84 @@ export async function handleWebhook(req, res) {
 }
 
 // ======================================================
+// دالة لجلب الحساب التالي النشط للدوران (Round-Robin)
+// ======================================================
+export async function getNextActiveAccount(pageId) {
+    try {
+        const accounts = await MessengerPageAccount.findAll({
+            where: { pageId, isActive: true, status: 'active' },
+            order: [['lastUsedAt', 'ASC'], ['id', 'ASC']]
+        });
+        if (accounts && accounts.length > 0) {
+            return accounts[0];
+        }
+    } catch (e) {
+        console.error('[getNextActiveAccount] Error:', e);
+    }
+    return null;
+}
+
+// ======================================================
+// دالة لتنفيذ عمليات المراسلة مع التبديل التلقائي وتوزيع الأحمال بالتساوي
+// ======================================================
+export async function executeWithFailover(pageId, apiFn) {
+    let accounts = [];
+    try {
+        accounts = await MessengerPageAccount.findAll({
+            where: { pageId, isActive: true, status: 'active' },
+            order: [['lastUsedAt', 'ASC'], ['id', 'ASC']]
+        });
+    } catch (e) {
+        console.error('[executeWithFailover] Error querying accounts:', e);
+    }
+
+    // إذا لم توجد حسابات نشطة في الجدول، نلجأ إلى page.accessToken كـ Fallback
+    if (!accounts || accounts.length === 0) {
+        const page = await MessengerPage.findOne({ where: { pageId } });
+        if (!page || !page.accessToken) {
+            console.error(`[executeWithFailover] No access token found for page ${pageId}`);
+            return { error: 'No access token available' };
+        }
+        return await apiFn(page.accessToken);
+    }
+
+    let lastResult = null;
+    for (const acc of accounts) {
+        try {
+            const result = await apiFn(acc.accessToken);
+            lastResult = result;
+
+            if (result && result.error) {
+                const err = result.error;
+                const errStr = JSON.stringify(err);
+                const isCheckpoint = errStr.includes('checkpoint') || (err.code === 190 && err.error_subcode === 459) || errStr.includes('You cannot access the app');
+                const isTokenExpired = err.code === 190;
+
+                if (isCheckpoint) {
+                    console.error(`🚨 [Account Checkpoint] الحساب "${acc.fbUserName}" (${acc.fbUserId}) اتقفل سيلفي/تحقق. يتم استبعاده وتجربة الحساب التالي...`);
+                    await acc.update({ status: 'checkpoint', lastError: err.message || 'حساب فيسبوك محظور (سيلفي / تحقق)' });
+                    continue; // جرب الحساب اللي بعده فوراً!
+                } else if (isTokenExpired) {
+                    console.error(`⚠️ [Account Expired] توكن الحساب "${acc.fbUserName}" منتهي الصلاحية. يتم تجربة الحساب التالي...`);
+                    await acc.update({ status: 'error', lastError: err.message || 'انتهت صلاحية الرمز' });
+                    continue; // جرب الحساب اللي بعده
+                } else {
+                    return result;
+                }
+            }
+
+            // العملية نجحت! حدّث وقت آخر استخدام للدوران بالتساوي
+            acc.update({ lastUsedAt: new Date(), lastError: null }).catch(() => {});
+            return result;
+        } catch (callErr) {
+            lastResult = { error: callErr };
+            console.error(`[executeWithFailover] Exception during call for "${acc.fbUserName}":`, callErr);
+        }
+    }
+    return lastResult;
+}
+
+// ======================================================
 // معالجة حدث الكومنت: لايك + رد ترحيبي + فتح ماسنجر بالـ AI
 // ======================================================
 async function handleCommentEvent(pageId, commentData) {
@@ -122,7 +201,6 @@ async function handleCommentEvent(pageId, commentData) {
         return;
     }
 
-    const accessToken = page.accessToken;
     const commentId = commentData.comment_id || commentData.id;
     const commenterId = commentData.from?.id;
     const commenterName = commentData.from?.name || commentData.from?.username || 'العميل';
@@ -141,17 +219,17 @@ async function handleCommentEvent(pageId, commentData) {
 
     console.log(`💬 [Comment] From: ${commenterName} (${commenterId}) | Text: "${commentText}"`);
 
-    // 1. عمل لايك على الكومنت
-    await likeComment(commentId, accessToken);
+    // 1. عمل لايك على الكومنت بالتناوب
+    await executeWithFailover(pageId, (token) => likeComment(commentId, token));
 
-    // 2. الرد على الكومنت بالرسالة الترحيبية
+    // 2. الرد على الكومنت بالرسالة الترحيبية بالتناوب
     const firstName = commenterName.split(' ')[0];
     let publicReply = page.defaultComment || 'أهلاً وسهلاً بحضرتك 😊\nتم إرسال التفاصيل لك في الرسائل الخاصة ✅';
     publicReply = publicReply.replace('{name}', firstName);
-    await replyToComment(commentId, publicReply, accessToken);
+    await executeWithFailover(pageId, (token) => replyToComment(commentId, publicReply, token));
 
     // 3. فتح محادثة ماسنجر مع العميل
-    // لو النظام = fixed reply: ابعت الرد الثابت مرة واحدة بس
+    // لو النظام = fixed reply: ابعت الرد الثابت مرة واحدة بس بالتناوب
     if (page.replyMode === 'fixed') {
         if (page.fixedReply && commenterId) {
             const fixedMsg = page.fixedReply.replace('{name}', firstName);
@@ -162,8 +240,8 @@ async function handleCommentEvent(pageId, commentData) {
                     defaults: { UserId: page.UserId, pageId, senderId: commenterId, messageCount: 0, is_handoff: false }
                 });
 
-                // إرسال الرد الثابت دائماً مع أي كومنت جديد
-                await sendPrivateReplyToComment(commentId, fixedMsg, accessToken);
+                // إرسال الرد الثابت دائماً مع أي كومنت جديد بالتناوب
+                await executeWithFailover(pageId, (token) => sendPrivateReplyToComment(commentId, fixedMsg, token));
                 await conv.update({ messageCount: conv.messageCount + 1, lastMessageAt: new Date() });
                 await Message.create({ UserId: page.UserId, remoteJid: `msng_${pageId}_${commenterId}`, role: 'model', content: fixedMsg });
                 console.log(`✅ [Fixed Reply] Sent fixed reply to ${commenterId} (via comment)`);
@@ -199,8 +277,10 @@ async function likeComment(commentId, accessToken) {
         } else {
             console.warn(`⚠️ [Comment] Failed to like comment ${commentId}:`, data);
         }
+        return data;
     } catch (err) {
         console.error(`[Comment] Error liking comment ${commentId}:`, err);
+        return { error: err };
     }
 }
 
@@ -228,8 +308,10 @@ async function replyToComment(commentId, message, accessToken) {
         } else {
             console.warn(`⚠️ [Comment] Failed to reply to comment ${commentId}:`, data);
         }
+        return data;
     } catch (err) {
         console.error(`[Comment] Error replying to comment ${commentId}:`, err);
+        return { error: err };
     }
 }
 
@@ -246,7 +328,8 @@ async function processMessengerMessage(pageId, senderId, messageText, commentId 
     }
 
     const userId = page.UserId;
-    const accessToken = page.accessToken;
+    const activeAcc = await getNextActiveAccount(pageId);
+    const accessToken = activeAcc ? activeAcc.accessToken : page.accessToken;
 
     // إرسال علامة "يكتب الآن..." فوراً
     sendMessengerAction(senderId, 'typing_on', accessToken);
@@ -294,9 +377,9 @@ async function processMessengerMessage(pageId, senderId, messageText, commentId 
         if (page.replyMode === 'fixed' && isRequestingImages) {
             if (fixedImages.length > 0) {
                 console.log(`📸 [Fixed Images] Sending ${fixedImages.length} images to ${senderId}`);
-                await sendMessengerImages(senderId, fixedImages, accessToken);
+                await executeWithFailover(pageId, (tok) => sendMessengerImages(senderId, fixedImages, tok));
             } else {
-                await sendMessengerReply(senderId, 'عفواً، لا توجد صور إضافية متوفرة حالياً.', accessToken);
+                await executeWithFailover(pageId, (tok) => sendMessengerReply(senderId, 'عفواً، لا توجد صور إضافية متوفرة حالياً.', tok));
             }
             await conversation.update({ messageCount: conversation.messageCount + 1, lastMessageAt: new Date() });
             clearInterval(typingInterval);
@@ -317,10 +400,10 @@ async function processMessengerMessage(pageId, senderId, messageText, commentId 
                 });
                 if (button) {
                     if (button.responseText) {
-                        await sendMessengerReply(senderId, button.responseText, accessToken);
+                        await executeWithFailover(pageId, (tok) => sendMessengerReply(senderId, button.responseText, tok));
                     }
                     if (button.responseImage) {
-                        await sendMessengerImage(senderId, button.responseImage, accessToken);
+                        await executeWithFailover(pageId, (tok) => sendMessengerImage(senderId, button.responseImage, tok));
                     }
                     await conversation.update({ messageCount: conversation.messageCount + 1, lastMessageAt: new Date() });
                     clearInterval(typingInterval);
@@ -349,7 +432,7 @@ async function processMessengerMessage(pageId, senderId, messageText, commentId 
                     await Message.create({ UserId: userId, remoteJid: `msng_${pageId}_${senderId}`, role: 'model', content: fixedMsg });
                     
                     if (commentId) {
-                        await sendPrivateReplyToComment(commentId, fixedMsg, accessToken);
+                        await executeWithFailover(pageId, (tok) => sendPrivateReplyToComment(commentId, fixedMsg, tok));
                     } else {
                         // إعداد الأزرار السريعة (Quick Replies)
                         let quickReplies = [];
@@ -392,15 +475,15 @@ async function processMessengerMessage(pageId, senderId, messageText, commentId 
 
                         // إرسال الرد الثابت مع الأزرار
                         if (quickReplies.length > 0) {
-                            await sendMessengerReply(senderId, fixedMsg, accessToken, quickReplies);
+                            await executeWithFailover(pageId, (tok) => sendMessengerReply(senderId, fixedMsg, tok, quickReplies));
                         } else {
-                            await sendMessengerReply(senderId, fixedMsg, accessToken);
+                            await executeWithFailover(pageId, (tok) => sendMessengerReply(senderId, fixedMsg, tok));
                         }
 
                         // لو فيه صورة واحدة فقط مرفقة، إرسالها فوراً مع الرسالة
                         if (fixedImages.length === 1) {
                             await new Promise(r => setTimeout(r, 800));
-                            await sendMessengerImage(senderId, fixedImages[0], accessToken);
+                            await executeWithFailover(pageId, (tok) => sendMessengerImage(senderId, fixedImages[0], tok));
                         }
                     }
                     console.log(`✅ [Fixed Reply] Sent to ${senderId}${fixedImages.length > 0 ? ` (with ${fixedImages.length} images option)` : ''}`);
@@ -455,7 +538,7 @@ async function processMessengerMessage(pageId, senderId, messageText, commentId 
                 
                 const handoffMessage = "عفواً، سأقوم بتحويلك الآن لأحد ممثلي خدمة العملاء للرد على استفسارك بدقة. يرجى الانتظار لحين الرد عليك.";
                 await Message.create({ UserId: userId, remoteJid: conversationId, role: 'model', content: handoffMessage });
-                await sendMessengerReply(senderId, handoffMessage, accessToken);
+                await executeWithFailover(pageId, (tok) => sendMessengerReply(senderId, handoffMessage, tok));
                 
                 // Notify WhatsApp Control Group
                 try {
@@ -489,9 +572,9 @@ async function processMessengerMessage(pageId, senderId, messageText, commentId 
             // 8. ابعت الرد للعميل على الماسنجر
             if (commentId) {
                 // دايماً استخدم ميزة Private Reply المخصصة للكومنتات لأي كومنت
-                await sendPrivateReplyToComment(commentId, aiReply, accessToken);
+                await executeWithFailover(pageId, (tok) => sendPrivateReplyToComment(commentId, aiReply, tok));
             } else {
-                await sendMessengerReply(senderId, aiReply, accessToken);
+                await executeWithFailover(pageId, (tok) => sendMessengerReply(senderId, aiReply, tok));
             }
         }
     } finally {
@@ -661,14 +744,13 @@ export async function sendMessengerImage(recipientId, imageUrl, accessToken) {
         const data = await response.json();
         if (data.error) {
             console.error('[Messenger] Send Image Error:', data.error);
-            return false;
         } else {
             console.log(`✅ [Messenger] Image sent to ${recipientId}: ${fullUrl}`);
-            return true;
         }
+        return data;
     } catch (err) {
         console.error('[Messenger] Failed to send image:', err);
-        return false;
+        return { error: err };
     }
 }
 
@@ -705,8 +787,10 @@ async function sendPrivateReplyToComment(commentId, text, accessToken) {
         } else {
             console.log(`✅ [Messenger] Private reply sent for comment ${commentId}`);
         }
+        return data;
     } catch (err) {
         console.error('[Messenger] Failed to send private reply:', err);
+        return { error: err };
     }
 }
 
@@ -794,10 +878,17 @@ ${conversationText}`
 // API Routes للداشبورد
 // ======================================================
 
-// جلب كل الصفحات المربوطة للمستخدم
+// جلب كل الصفحات المربوطة للمستخدم مع حسابات الأدمن التابعة لها
 export async function getPages(req, res) {
     try {
-        const pages = await MessengerPage.findAll({ where: { UserId: req.user.id } });
+        const pages = await MessengerPage.findAll({
+            where: { UserId: req.user.id },
+            include: [{
+                model: MessengerPageAccount,
+                as: 'accounts',
+                required: false
+            }]
+        });
         res.json({ success: true, pages });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -848,6 +939,38 @@ export async function connectPage(req, res) {
         if (!created) {
             // لو موجودة قبل كده، حدّثها
             await page.update({ pageName, accessToken, isActive: true });
+        }
+
+        // احفظ أو حدّث الحساب في جدول حسابات الأدمن
+        let fbUserId = `manual_${pageId}`;
+        let fbUserName = pageName;
+        let fbUserPicture = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
+        try {
+            const meRes = await fetch(`https://graph.facebook.com/v18.0/me?access_token=${accessToken}&fields=id,name,picture.type(large)`);
+            const meData = await meRes.json();
+            if (meData && meData.id) {
+                fbUserId = meData.id;
+                fbUserName = meData.name || pageName;
+                if (meData.picture?.data?.url) fbUserPicture = meData.picture.data.url;
+            }
+        } catch (e) {}
+
+        const [acc, accCreated] = await MessengerPageAccount.findOrCreate({
+            where: { pageId, fbUserId },
+            defaults: {
+                pageId,
+                pageName,
+                UserId: req.user.id,
+                fbUserId,
+                fbUserName,
+                fbUserPicture,
+                accessToken,
+                status: 'active',
+                isActive: true
+            }
+        });
+        if (!accCreated) {
+            await acc.update({ pageName, accessToken, fbUserName, fbUserPicture, status: 'active', isActive: true, lastError: null });
         }
 
         // 👉 تفعيل الـ Webhook للصفحة
@@ -954,6 +1077,29 @@ export async function connectWithSystemToken(req, res) {
                     if (igId) updateData.instagramId = igId;
                     if (igUsername) updateData.instagramUsername = igUsername;
                     await record.update(updateData);
+                }
+
+                // حفظ أو تحديث الحساب في MessengerPageAccount
+                const sysUserId = `sys_${page.id}`;
+                const sysUserName = `مستخدم نظام (${page.name})`;
+                const sysUserPic = 'https://cdn-icons-png.flaticon.com/512/4712/4712035.png';
+                const [acc, accCreated] = await MessengerPageAccount.findOrCreate({
+                    where: { pageId: page.id, fbUserId: sysUserId },
+                    defaults: {
+                        pageId: page.id,
+                        pageName: page.name,
+                        UserId: userId,
+                        fbUserId: sysUserId,
+                        fbUserName: sysUserName,
+                        fbUserPicture: sysUserPic,
+                        accessToken: pageToken,
+                        status: 'active',
+                        isActive: true,
+                        isSystemUser: true
+                    }
+                });
+                if (!accCreated) {
+                    await acc.update({ pageName: page.name, accessToken: pageToken, status: 'active', isActive: true, lastError: null });
                 }
 
                 await subscribePageWebhook(page.id, pageToken, page.name);
@@ -1116,6 +1262,29 @@ export async function syncSystemPages(req, res) {
                 await record.update(updateData);
             }
 
+            // حفظ أو تحديث الحساب في MessengerPageAccount
+            const sysUserId = `sys_${page.id}`;
+            const sysUserName = `مستخدم نظام (${page.name})`;
+            const sysUserPic = 'https://cdn-icons-png.flaticon.com/512/4712/4712035.png';
+            const [acc, accCreated] = await MessengerPageAccount.findOrCreate({
+                where: { pageId: page.id, fbUserId: sysUserId },
+                defaults: {
+                    pageId: page.id,
+                    pageName: page.name,
+                    UserId: userId,
+                    fbUserId: sysUserId,
+                    fbUserName: sysUserName,
+                    fbUserPicture: sysUserPic,
+                    accessToken: pageToken,
+                    status: 'active',
+                    isActive: true,
+                    isSystemUser: true
+                }
+            });
+            if (!accCreated) {
+                await acc.update({ pageName: page.name, accessToken: pageToken, status: 'active', isActive: true, lastError: null });
+            }
+
             await subscribePageWebhook(page.id, pageToken, page.name);
         }
 
@@ -1148,7 +1317,8 @@ export async function disconnectPage(req, res) {
     try {
         const { pageId } = req.params;
         await MessengerPage.destroy({ where: { pageId, UserId: req.user.id } });
-        res.json({ success: true, message: 'تم إلغاء ربط الصفحة' });
+        await MessengerPageAccount.destroy({ where: { pageId, UserId: req.user.id } });
+        res.json({ success: true, message: 'تم إلغاء ربط الصفحة وحساباتها' });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }
@@ -1224,7 +1394,8 @@ export async function updatePageSettings(req, res) {
 export async function disconnectAllPages(req, res) {
     try {
         await MessengerPage.destroy({ where: { UserId: req.user.id } });
-        res.json({ success: true, message: 'تم إلغاء ربط جميع الصفحات بنجاح' });
+        await MessengerPageAccount.destroy({ where: { UserId: req.user.id } });
+        res.json({ success: true, message: 'تم إلغاء ربط جميع الصفحات وحساباتها بنجاح' });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }
@@ -1329,6 +1500,23 @@ export async function handleFacebookCallback(req, res) {
 
         console.log(`[Facebook OAuth] Found ${pagesData.data.length} pages`);
 
+        // جلب بيانات الحساب الشخصي الذي سجل الدخول
+        let fbUserId = 'unknown';
+        let fbUserName = 'حساب فيسبوك';
+        let fbUserPicture = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
+        try {
+            const meRes = await fetch(`https://graph.facebook.com/v18.0/me?access_token=${userToken}&fields=id,name,picture.type(large)`);
+            const meData = await meRes.json();
+            if (meData && meData.id) {
+                fbUserId = meData.id;
+                fbUserName = meData.name || 'حساب فيسبوك';
+                if (meData.picture?.data?.url) fbUserPicture = meData.picture.data.url;
+            }
+            console.log(`[Facebook OAuth] ✅ Logged in as FB user: ${fbUserName} (${fbUserId})`);
+        } catch (meErr) {
+            console.error('[Facebook OAuth] Failed to get user profile:', meErr);
+        }
+
         // الخطوة 3: احفظ كل صفحة في DB
         let savedCount = 0;
         for (const page of pagesData.data) {
@@ -1362,6 +1550,35 @@ export async function handleFacebookCallback(req, res) {
                     if (igUsername) updateData.instagramUsername = igUsername;
                     await record.update(updateData);
                 }
+
+                // حفظ أو تحديث الحساب في MessengerPageAccount لربط أكثر من أدمن
+                const [acc, accCreated] = await MessengerPageAccount.findOrCreate({
+                    where: { pageId: page.id, fbUserId },
+                    defaults: {
+                        pageId: page.id,
+                        pageName: page.name,
+                        UserId: userId,
+                        fbUserId,
+                        fbUserName,
+                        fbUserPicture,
+                        accessToken: page.access_token,
+                        status: 'active',
+                        isActive: true,
+                        isSystemUser: false
+                    }
+                });
+                if (!accCreated) {
+                    await acc.update({
+                        pageName: page.name,
+                        accessToken: page.access_token,
+                        fbUserName,
+                        fbUserPicture,
+                        status: 'active',
+                        isActive: true,
+                        lastError: null
+                    });
+                }
+                console.log(`[Facebook OAuth] ✅ Linked admin "${fbUserName}" to page "${page.name}"`);
 
                 // 👉 تفعيل الـ Webhook للصفحة عشان يتبعت لنا الرسائل والكومنتات
                 try {
@@ -1402,5 +1619,147 @@ export async function handleFacebookCallback(req, res) {
     } catch (err) {
         console.error('[Facebook OAuth] Callback Error:', err);
         res.redirect('/dashboard/messenger?error=server_error');
+    }
+}
+
+// ======================================================
+// دوال إدارة حسابات الأدمن المتعددة للصفحات (Multi-Account)
+// ======================================================
+
+// 1. تفعيل أو إيقاف حساب مؤقتاً
+export async function togglePageAccount(req, res) {
+    try {
+        const { accountId } = req.params;
+        const account = await MessengerPageAccount.findOne({
+            where: { id: accountId, UserId: req.user.id }
+        });
+        if (!account) return res.status(404).json({ success: false, message: 'الحساب غير موجود' });
+
+        const newIsActive = !account.isActive;
+        const newStatus = newIsActive ? (account.status === 'paused' ? 'active' : account.status) : 'paused';
+        await account.update({ isActive: newIsActive, status: newStatus });
+
+        res.json({
+            success: true,
+            isActive: newIsActive,
+            status: newStatus,
+            message: newIsActive ? `✅ تم تفعيل الحساب "${account.fbUserName}" بنجاح` : `⏸️ تم إيقاف الحساب "${account.fbUserName}" مؤقتاً`
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+}
+
+// 2. حذف حساب من الصفحة
+export async function deletePageAccount(req, res) {
+    try {
+        const { accountId } = req.params;
+        const account = await MessengerPageAccount.findOne({
+            where: { id: accountId, UserId: req.user.id }
+        });
+        if (!account) return res.status(404).json({ success: false, message: 'الحساب غير موجود' });
+
+        const name = account.fbUserName;
+        await account.destroy();
+        res.json({ success: true, message: `🗑️ تم إزالة الحساب "${name}" من الصفحة بنجاح` });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+}
+
+// 3. فحص حالة الرمز في الوقت الفعلي
+export async function checkPageAccountStatus(req, res) {
+    try {
+        const { accountId } = req.params;
+        const account = await MessengerPageAccount.findOne({
+            where: { id: accountId, UserId: req.user.id }
+        });
+        if (!account) return res.status(404).json({ success: false, message: 'الحساب غير موجود' });
+
+        const testRes = await fetch(`https://graph.facebook.com/v18.0/me?access_token=${account.accessToken}&fields=id,name`);
+        const testData = await testRes.json();
+
+        if (testData.error) {
+            const errStr = JSON.stringify(testData.error);
+            const isCp = errStr.includes('checkpoint') || testData.error.error_subcode === 459 || errStr.includes('You cannot access the app');
+            const status = isCp ? 'checkpoint' : 'error';
+            const errorMsg = isCp ? 'الحساب محظور (سيلفي / تأكيد هوية في فيسبوك)' : (testData.error.message || 'خطأ في الرمز');
+            await account.update({ status, lastError: errorMsg });
+            return res.json({
+                success: false,
+                status,
+                message: isCp ? '⚠️ الحساب محظور حالياً (مطلوب سيلفي أو تأكيد هوية في فيسبوك) لفتحه' : `⚠️ ${errorMsg}`
+            });
+        }
+
+        await account.update({ status: 'active', lastError: null });
+        res.json({ success: true, status: 'active', message: `✅ الحساب "${account.fbUserName}" شغال تمام والرمز صالح بدون مشاكل` });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+}
+
+// 4. إضافة توكن حساب يدوي للصفحة
+export async function addPageAccountManual(req, res) {
+    try {
+        const { pageId } = req.params;
+        const { accessToken } = req.body;
+        if (!accessToken || !accessToken.trim()) {
+            return res.status(400).json({ success: false, message: 'يرجى إدخال رمز الوصول (Token)' });
+        }
+
+        const token = accessToken.trim();
+        const page = await MessengerPage.findOne({ where: { pageId, UserId: req.user.id } });
+        if (!page) return res.status(404).json({ success: false, message: 'الصفحة غير موجودة' });
+
+        // فحص التوكن وجلب هوية صاحب التوكن
+        const meRes = await fetch(`https://graph.facebook.com/v18.0/me?access_token=${token}&fields=id,name,picture.type(large)`);
+        const meData = await meRes.json();
+
+        if (meData.error) {
+            return res.status(400).json({ success: false, message: `فشل التحقق من الرمز: ${meData.error.message}` });
+        }
+
+        const fbUserId = meData.id;
+        const fbUserName = meData.name || 'حساب فيسبوك';
+        const fbUserPicture = meData.picture?.data?.url || null;
+
+        const [acc, created] = await MessengerPageAccount.findOrCreate({
+            where: { pageId, fbUserId },
+            defaults: {
+                pageId,
+                pageName: page.pageName,
+                UserId: req.user.id,
+                fbUserId,
+                fbUserName,
+                fbUserPicture,
+                accessToken: token,
+                status: 'active',
+                isActive: true,
+                isSystemUser: false
+            }
+        });
+
+        if (!created) {
+            await acc.update({
+                accessToken: token,
+                fbUserName,
+                fbUserPicture,
+                status: 'active',
+                isActive: true,
+                lastError: null
+            });
+        }
+
+        // اشتراك الـ Webhook بالتوكن الجديد
+        await subscribePageWebhook(pageId, token, page.pageName);
+
+        res.json({
+            success: true,
+            message: `✅ تم ربط الحساب "${fbUserName}" بالصفحة بنجاح!`,
+            account: acc
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
     }
 }

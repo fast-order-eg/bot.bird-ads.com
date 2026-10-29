@@ -1,5 +1,6 @@
 import { DataTypes } from 'sequelize';
 import sequelize from '../config/database.js';
+import MessengerPageAccount from './MessengerPageAccount.js';
 
 const MessengerPage = sequelize.define('MessengerPage', {
     id: {
@@ -85,6 +86,17 @@ const MessengerPage = sequelize.define('MessengerPage', {
     }
 }, {
     tableName: 'messenger_pages'
+});
+
+MessengerPage.hasMany(MessengerPageAccount, {
+    foreignKey: 'pageId',
+    sourceKey: 'pageId',
+    as: 'accounts'
+});
+
+MessengerPageAccount.belongsTo(MessengerPage, {
+    foreignKey: 'pageId',
+    targetKey: 'pageId'
 });
 
 export default MessengerPage;

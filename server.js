@@ -31,6 +31,7 @@ import SimulationMessage from './models/SimulationMessage.js';
 import TeachMessage from './models/TeachMessage.js';
 import Product from './models/Product.js';
 import InteractiveButton from './models/InteractiveButton.js';
+import MessengerPageAccount from './models/MessengerPageAccount.js';
 
 // Routes
 import authRoutes from './routes/auth.js';
@@ -160,6 +161,55 @@ sequelize.sync().then(async () => {
     try {
         await sequelize.query('ALTER TABLE messenger_pages ADD COLUMN isSystemUser BOOLEAN DEFAULT false;');
     } catch (e) {}
+
+    // مزامنة جدول حسابات الأدمن MessengerPageAccount
+    try {
+        await MessengerPageAccount.sync({ alter: true });
+        console.log('✅ MessengerPageAccount synced successfully');
+
+        // الترحيل التلقائي للصفحات القديمة الموجودة في messenger_pages
+        const existingPages = await MessengerPage.findAll();
+        for (const p of existingPages) {
+            const accCount = await MessengerPageAccount.count({ where: { pageId: p.pageId } });
+            if (accCount === 0 && p.accessToken) {
+                let fbUserId = `acc_${p.pageId}`;
+                let fbUserName = p.pageName;
+                let fbUserPicture = 'https://cdn-icons-png.flaticon.com/512/149/149071.png';
+                let isSys = Boolean(p.isSystemUser);
+
+                try {
+                    const meRes = await fetch(`https://graph.facebook.com/v18.0/me?access_token=${p.accessToken}&fields=id,name,picture.type(large)`);
+                    const meData = await meRes.json();
+                    if (meData && meData.id) {
+                        fbUserId = meData.id;
+                        fbUserName = meData.name || p.pageName;
+                        if (meData.picture?.data?.url) fbUserPicture = meData.picture.data.url;
+                    }
+                } catch (e) {}
+
+                if (isSys) {
+                    fbUserName = `مستخدم نظام (${p.pageName})`;
+                    fbUserPicture = 'https://cdn-icons-png.flaticon.com/512/4712/4712035.png';
+                }
+
+                await MessengerPageAccount.create({
+                    pageId: p.pageId,
+                    pageName: p.pageName,
+                    UserId: p.UserId,
+                    fbUserId,
+                    fbUserName,
+                    fbUserPicture,
+                    accessToken: p.accessToken,
+                    status: 'active',
+                    isActive: true,
+                    isSystemUser: isSys
+                });
+                console.log(`[Auto-Migrate] ✅ Created default account for page: ${p.pageName} (${fbUserName})`);
+            }
+        }
+    } catch (migErr) {
+        console.error('Error during MessengerPageAccount sync/migration:', migErr);
+    }
 
     // Create Super Admin if not exists
     const adminExists = await User.findOne({ where: { role: 'super_admin' } });
