@@ -241,7 +241,6 @@
             document.getElementById('system-user-token-input').value = '';
             document.getElementById('system-token-loading').style.display = 'none';
             document.getElementById('btn-submit-system-token').disabled = false;
-            new bootstrap.Modal(document.getElementById('systemUserModal')).show();
         }
 
         async function submitSystemUserToken() {
@@ -269,6 +268,12 @@
                     const modalEl = document.getElementById('systemUserModal');
                     const modalInstance = bootstrap.Modal.getInstance(modalEl);
                     if (modalInstance) modalInstance.hide();
+                    setTimeout(() => {
+                        document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+                        document.body.classList.remove('modal-open');
+                        document.body.style.overflow = '';
+                        document.body.style.paddingRight = '';
+                    }, 250);
                     loadPages();
                 } else {
                     showToast(data.message || '❌ فشل في ربط التوكن', 'danger');
