@@ -18,7 +18,10 @@ import {
     togglePageAccount,
     deletePageAccount,
     checkPageAccountStatus,
-    addPageAccountManual
+    addPageAccountManual,
+    checkFbUserStatus,
+    toggleFbUser,
+    deleteFbUser
 } from '../controllers/messengerController.js';
 
 const router = express.Router();
@@ -107,6 +110,22 @@ router.post('/api/messenger/account/:accountId/check', (req, res) => {
 router.post('/api/messenger/page/:pageId/add-account', (req, res) => {
     if (!req.isAuthenticated()) return res.status(401).json({ success: false });
     return addPageAccountManual(req, res);
+});
+
+// ====== إدارة الحسابات المربوطة بالأعلى (FB User Master Actions) ======
+router.post('/api/messenger/fb-user/:fbUserId/check', (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ success: false });
+    return checkFbUserStatus(req, res);
+});
+
+router.post('/api/messenger/fb-user/:fbUserId/toggle', (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ success: false });
+    return toggleFbUser(req, res);
+});
+
+router.delete('/api/messenger/fb-user/:fbUserId', (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ success: false });
+    return deleteFbUser(req, res);
 });
 
 export default router;

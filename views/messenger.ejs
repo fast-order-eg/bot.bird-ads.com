@@ -71,7 +71,7 @@
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="white" viewBox="0 0 24 24">
                                     <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
                                 </svg>
-                                تسجيل الدخول بالفيسبوك
+                                تسجيل الدخول بالفيسبوك (ربط حساب / حساب إضافي)
                             </a>
                         </div>
                         <div class="col-12 col-md-6">
@@ -82,6 +82,22 @@
                                 </svg>
                                 ⚡ ربط بتوكن دائم (System User)
                             </button>
+                        </div>
+                    </div>
+
+                    <!-- الحسابات الشخصية / النظام المربوطة بالأعلى -->
+                    <div id="top-connected-accounts-section" style="display: none;" class="pt-3 border-top border-secondary border-opacity-25 mt-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                            <div>
+                                <span class="text-white small fw-bold d-flex align-items-center gap-2">
+                                    <svg width="16" height="16" fill="#0866ff" viewBox="0 0 16 16"><path d="M7 14s-1 0-1-1 1-4 5-4 5 3 5 4-1 1-1 1H7zm4-6a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path fill-rule="evenodd" d="M5.216 14A2.238 2.238 0 0 1 5 13c0-1.355.68-2.75 1.936-3.72A6.325 6.325 0 0 0 5 9c-4 0-5 3-5 4s1 1 1 1h4.216z"/><path d="M4.5 8a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/></svg>
+                                    الحسابات المربوطة المسؤولة عن الرد (<span id="top-accounts-count">0</span>)
+                                </span>
+                                <div class="text-white-50" style="font-size:0.75rem;">يتم استخدام هذه الحسابات بالتناوب المتساوي (Round-Robin) للرد على العملاء وتفادي حظر وسيلفي الفيسبوك</div>
+                            </div>
+                        </div>
+                        <div id="top-accounts-list" class="d-flex flex-column gap-2 mt-2">
+                            <!-- Populated dynamically via JS -->
                         </div>
                     </div>
                 </div>
@@ -421,6 +437,72 @@
             const list = document.getElementById('pages-list');
             const filter = document.getElementById('page-filter');
 
+            // تحديث قسم الحسابات المربوطة بالأعلى
+            const accountsListEl = document.getElementById('top-accounts-list');
+            const accountsSectionEl = document.getElementById('top-connected-accounts-section');
+            const accountsCountEl = document.getElementById('top-accounts-count');
+
+            if (data.connectedAccounts && data.connectedAccounts.length > 0) {
+                if (accountsSectionEl) accountsSectionEl.style.display = 'block';
+                if (accountsCountEl) accountsCountEl.innerText = data.connectedAccounts.length;
+                if (accountsListEl) {
+                    accountsListEl.innerHTML = data.connectedAccounts.map(acc => {
+                        const isSys = acc.isSystemUser;
+                        const isPaused = !acc.isActive;
+                        const isBanned = acc.status === 'checkpoint';
+                        
+                        let statusBadge = '<span class="badge bg-success bg-opacity-75 text-white" style="font-size:0.7rem;">🟢 شغال ونشط</span>';
+                        if (isPaused) {
+                            statusBadge = '<span class="badge bg-secondary text-white" style="font-size:0.7rem;">⏸️ متوقف مؤقتاً</span>';
+                        } else if (isBanned) {
+                            statusBadge = '<span class="badge bg-danger text-white animate-pulse" style="font-size:0.7rem;">🔴 مقفول / سيلفي (Checkpoint)</span>';
+                        } else if (acc.status === 'error') {
+                            statusBadge = '<span class="badge bg-warning text-dark" style="font-size:0.7rem;">⚠️ يحتاج فحص / تجديد</span>';
+                        }
+
+                        const pagesNamesStr = (acc.pagesNames && acc.pagesNames.length > 0) ? acc.pagesNames.join('، ') : 'لا يوجد صفحات';
+                        const pagesText = acc.pagesCount > 0 
+                            ? `يدير ${acc.pagesCount} ${acc.pagesCount === 1 ? 'صفحة' : 'صفحات'}: <span class="text-info fw-semibold">${pagesNamesStr}</span>`
+                            : 'لا يدير أي صفحات حالياً';
+
+                        const safeAccName = encodeURIComponent(acc.fbUserName || 'حساب');
+
+                        return `
+                        <div class="d-flex justify-content-between align-items-center p-2 rounded-3 flex-wrap gap-2" style="background: rgba(255,255,255,0.04); border: 1px solid ${isBanned ? 'rgba(220,53,69,0.4)' : 'rgba(255,255,255,0.08)'};">
+                            <div class="d-flex align-items-center gap-2">
+                                <img src="${acc.fbUserPicture || 'https://cdn-icons-png.flaticon.com/512/149/149071.png'}" 
+                                     alt="${acc.fbUserName}" class="rounded-circle border" style="width: 38px; height: 38px; object-fit: cover; border-color: ${isBanned ? '#dc3545' : '#0866ff'} !important;">
+                                <div>
+                                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                                        <span class="text-white fw-bold small">${acc.fbUserName}</span>
+                                        ${isSys ? '<span class="badge bg-info text-dark" style="font-size:0.65rem;">⚡ مستخدم نظام</span>' : '<span class="badge bg-primary bg-opacity-75 text-white" style="font-size:0.65rem;">👤 فيسبوك</span>'}
+                                        ${statusBadge}
+                                    </div>
+                                    <div class="text-white-50" style="font-size: 0.72rem;">
+                                        ${pagesText}
+                                        ${acc.lastError ? `<span class="text-danger ms-1">(${acc.lastError})</span>` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="d-flex align-items-center gap-1">
+                                <button class="btn btn-xs btn-outline-info py-1 px-2" style="font-size:0.75rem; border-radius:6px;" onclick="checkFbUserStatus('${acc.fbUserId}')" title="فحص حالة الحساب والتأكد من عدم قفله">
+                                    🔄 فحص
+                                </button>
+                                <button class="btn btn-xs ${acc.isActive ? 'btn-outline-warning' : 'btn-outline-success'} py-1 px-2" style="font-size:0.75rem; border-radius:6px;" onclick="toggleFbUser('${acc.fbUserId}')" title="${acc.isActive ? 'إيقاف مؤقت' : 'تشغيل'}">
+                                    ${acc.isActive ? '⏸️ إيقاف' : '▶️ تشغيل'}
+                                </button>
+                                <button class="btn btn-xs btn-outline-danger py-1 px-2" style="font-size:0.75rem; border-radius:6px;" onclick="deleteFbUser('${acc.fbUserId}', '${safeAccName}')" title="إلغاء ربط هذا الحساب من كل الصفحات">
+                                    🗑️ حذف
+                                </button>
+                            </div>
+                        </div>
+                        `;
+                    }).join('');
+                }
+            } else {
+                if (accountsSectionEl) accountsSectionEl.style.display = 'none';
+            }
+
             if (!data.pages || data.pages.length === 0) {
                 list.innerHTML = '<p class="text-white-50 text-center small py-2">لا توجد صفحات مربوطة بعد</p>';
                 return;
@@ -542,20 +624,11 @@
                     </div>
 
                     <!-- قسم حسابات الأدمن المسؤولة عن الرد -->
-                    <div class="p-2 rounded" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);">
+                    <div class="p-2 rounded mb-2" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);">
                         <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
                             <div class="d-flex align-items-center gap-2">
-                                <span class="text-white small fw-bold">👥 الأدمن المسؤولين عن الرد (${accountsCount}):</span>
-                                ${accountsCount > 1 ? '<span class="badge bg-success bg-opacity-75" style="font-size:0.65rem;">🔄 توزيع متساوي (Round-Robin)</span>' : '<span class="badge bg-secondary" style="font-size:0.65rem;">حساب فردي</span>'}
-                            </div>
-                            <div class="d-flex gap-1">
-                                <button class="btn btn-xs btn-outline-info d-flex align-items-center gap-1 py-1 px-2" style="font-size:0.75rem; border-radius:6px;" onclick="openAddAccountModal('${page.pageId}', '${encodeURIComponent(page.pageName)}')">
-                                    ➕ إضافة بالتوكن
-                                </button>
-                                <a href="/auth/facebook/messenger" class="btn btn-xs btn-outline-primary d-flex align-items-center gap-1 py-1 px-2" style="font-size:0.75rem; border-radius:6px;" title="قم بتبديل حسابك في الفيسبوك أولاً ثم اضغط هنا">
-                                    <svg width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path d="M16 8.049c0-4.446-3.582-8.05-8-8.05C3.58 0-.002 3.603-.002 8.05c0 4.017 2.926 7.347 6.75 7.951v-5.625h-2.03V8.05H6.75V6.275c0-2.017 1.195-3.131 3.022-3.131.876 0 1.791.157 1.791.157v1.98h-1.009c-.993 0-1.303.621-1.303 1.258v1.51h2.218l-.354 2.375H9.25V16c3.824-.604 6.75-3.934 6.75-7.951z"/></svg>
-                                    ربط فيسبوك آخر
-                                </a>
+                                <span class="text-white small fw-bold">👥 الأدمن المسؤولين عن الرد في هذه الصفحة (${accountsCount}):</span>
+                                ${accountsCount > 1 ? '<span class="badge bg-success bg-opacity-75" style="font-size:0.65rem;">🔄 تناوب متساوي لتفادي الحظر (Round-Robin)</span>' : '<span class="badge bg-secondary" style="font-size:0.65rem;">حساب فردي</span>'}
                             </div>
                         </div>
                         <div class="d-flex flex-wrap gap-2">
@@ -838,6 +911,55 @@
                 }
             } catch (e) {
                 showToast('حدث خطأ أثناء حذف الحساب', 'danger');
+            }
+        }
+
+        // ====== دوال التحكم في الحسابات الرئيسية بالأعلى ======
+        async function checkFbUserStatus(fbUserId) {
+            showToast('جاري فحص حالة الحساب من فيسبوك...', 'info');
+            try {
+                const res = await fetch(`/api/messenger/fb-user/${fbUserId}/check`, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message, data.status === 'active' ? 'success' : 'warning');
+                    loadPages();
+                } else {
+                    showToast(data.message || 'فشل فحص الحساب', 'danger');
+                }
+            } catch (e) {
+                showToast('خطأ في الاتصال بالسيرفر', 'danger');
+            }
+        }
+
+        async function toggleFbUser(fbUserId) {
+            try {
+                const res = await fetch(`/api/messenger/fb-user/${fbUserId}/toggle`, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    loadPages();
+                } else {
+                    showToast(data.message || 'فشل تغيير حالة الحساب', 'danger');
+                }
+            } catch (e) {
+                showToast('خطأ في الاتصال بالسيرفر', 'danger');
+            }
+        }
+
+        async function deleteFbUser(fbUserId, safeName) {
+            const name = decodeURIComponent(safeName || 'الحساب');
+            if (!confirm(`هل أنت متأكد من إلغاء ربط الحساب "${name}" وحذفه من جميع الصفحات؟`)) return;
+            try {
+                const res = await fetch(`/api/messenger/fb-user/${fbUserId}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    loadPages();
+                } else {
+                    showToast(data.message || 'فشل حذف الحساب', 'danger');
+                }
+            } catch (e) {
+                showToast('خطأ في الاتصال بالسيرفر', 'danger');
             }
         }
 

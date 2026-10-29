@@ -878,7 +878,7 @@ ${conversationText}`
 // API Routes للداشبورد
 // ======================================================
 
-// جلب كل الصفحات المربوطة للمستخدم مع حسابات الأدمن التابعة لها
+// جلب كل الصفحات المربوطة للمستخدم مع حسابات الأدمن التابعة لها والحسابات الرئيسية بالأعلى
 export async function getPages(req, res) {
     try {
         const pages = await MessengerPage.findAll({
@@ -889,7 +889,41 @@ export async function getPages(req, res) {
                 required: false
             }]
         });
-        res.json({ success: true, pages });
+
+        // جلب قائمة الحسابات الشخصية / مستخدمي النظام المميزين للأعلى
+        const allAccounts = await MessengerPageAccount.findAll({
+            where: { UserId: req.user.id }
+        });
+
+        const accountsMap = new Map();
+        for (const acc of allAccounts) {
+            const key = acc.fbUserId;
+            if (!accountsMap.has(key)) {
+                accountsMap.set(key, {
+                    id: acc.id,
+                    fbUserId: acc.fbUserId,
+                    fbUserName: acc.fbUserName,
+                    fbUserPicture: acc.fbUserPicture,
+                    isSystemUser: Boolean(acc.isSystemUser),
+                    status: acc.status,
+                    isActive: acc.isActive,
+                    lastError: acc.lastError,
+                    pagesCount: 0,
+                    pagesNames: []
+                });
+            }
+            const item = accountsMap.get(key);
+            item.pagesCount++;
+            if (acc.pageName && !item.pagesNames.includes(acc.pageName)) {
+                item.pagesNames.push(acc.pageName);
+            }
+            if (acc.status === 'checkpoint') item.status = 'checkpoint';
+            if (!acc.isActive) item.isActive = false;
+        }
+
+        const connectedAccounts = Array.from(accountsMap.values());
+
+        res.json({ success: true, pages, connectedAccounts });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }
@@ -985,13 +1019,16 @@ export async function connectPage(req, res) {
 
 function parseUserSettings(userRec) {
     if (!userRec || !userRec.settings) return {};
-    if (typeof userRec.settings === 'object') return { ...userRec.settings };
-    if (typeof userRec.settings === 'string') {
+    let val = userRec.settings;
+    while (typeof val === 'string') {
         try {
-            return JSON.parse(userRec.settings);
+            val = JSON.parse(val);
         } catch (e) {
             return {};
         }
+    }
+    if (val && typeof val === 'object' && !Array.isArray(val)) {
+        return { ...val };
     }
     return {};
 }
@@ -1123,14 +1160,15 @@ export async function connectWithSystemToken(req, res) {
         let meData = await meRes.json();
 
         if (meData.id && meData.name) {
-            let pageCheckRes = await fetch(
-                `https://graph.facebook.com/v18.0/${meData.id}?access_token=${token}&fields=category,instagram_business_account{id,username}`
-            );
-            let pageCheckData = await pageCheckRes.json();
-
-            // إذا كان صفحة (لها category)
-            if (pageCheckData.category) {
-                const igAccount = pageCheckData.instagram_business_account;
+            // نتحقق هل التوكن يخص صفحة مباشرة عبر فحص الـ subscribed_apps
+            const subCheck = await fetch(`https://graph.facebook.com/v18.0/me/subscribed_apps?access_token=${token}`);
+            if (subCheck.status === 200) {
+                // التوكن يتبع صفحة فيسبوك مباشرة
+                let igRes = await fetch(
+                    `https://graph.facebook.com/v18.0/me?access_token=${token}&fields=instagram_business_account{id,username}`
+                );
+                let igData = await igRes.json();
+                const igAccount = igData.instagram_business_account;
                 const igId = igAccount ? igAccount.id : null;
                 const igUsername = igAccount ? igAccount.username : null;
 
@@ -1161,6 +1199,29 @@ export async function connectWithSystemToken(req, res) {
                     await record.update(updateData);
                 }
 
+                // حفظ أو تحديث الحساب في MessengerPageAccount
+                const sysUserId = `sys_${meData.id}`;
+                const sysUserName = `مستخدم نظام (${meData.name})`;
+                const sysUserPic = 'https://cdn-icons-png.flaticon.com/512/4712/4712035.png';
+                const [acc, accCreated] = await MessengerPageAccount.findOrCreate({
+                    where: { pageId: meData.id, fbUserId: sysUserId },
+                    defaults: {
+                        pageId: meData.id,
+                        pageName: meData.name,
+                        UserId: userId,
+                        fbUserId: sysUserId,
+                        fbUserName: sysUserName,
+                        fbUserPicture: sysUserPic,
+                        accessToken: token,
+                        status: 'active',
+                        isActive: true,
+                        isSystemUser: true
+                    }
+                });
+                if (!accCreated) {
+                    await acc.update({ pageName: meData.name, accessToken: token, status: 'active', isActive: true, lastError: null });
+                }
+
                 await subscribePageWebhook(meData.id, token, meData.name);
                 await saveUserSetting(userRec, 'systemUserToken', token);
 
@@ -1171,10 +1232,10 @@ export async function connectWithSystemToken(req, res) {
                 });
             }
 
-            // إذا لم يكن صفحة، فهو مستخدم نظام (System User) مثل Rady ولكن لم يتم إسناد أي صفحات له بعد
+            // إذا لم يكن صفحة، فهو مستخدم نظام (System User) مثل Rady ولكن لم يتم إسناد أي صفحات له بعد في Business Manager
             return res.status(400).json({
                 success: false,
-                message: `⚠️ التوكن سليم ويتبع مستخدم النظام (${meData.name})، ولكن لا توجد أي صفحات مسندة له حالياً في مدير الأعمال! يرجى إسناد الصفحة لـ ${meData.name} أولاً من إعدادات الأعمال.`
+                message: `⚠️ التوكن سليم ويتبع (${meData.name})، ولكن لا توجد أي صفحات مسندة له حالياً في مدير الأعمال! يرجى إسناد الصفحة لـ ${meData.name} أولاً من إعدادات الأعمال.`
             });
         }
 
@@ -1758,6 +1819,120 @@ export async function addPageAccountManual(req, res) {
             success: true,
             message: `✅ تم ربط الحساب "${fbUserName}" بالصفحة بنجاح!`,
             account: acc
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+}
+
+// ======================================================
+// إدارة الحسابات المربوطة بالأعلى (FB User Master Actions)
+// ======================================================
+
+// فحص حالة الحساب من فيسبوك وتحديث وضعه في كل الصفحات
+export async function checkFbUserStatus(req, res) {
+    try {
+        const { fbUserId } = req.params;
+        const accounts = await MessengerPageAccount.findAll({
+            where: { UserId: req.user.id, fbUserId }
+        });
+
+        if (!accounts || accounts.length === 0) {
+            return res.status(404).json({ success: false, message: 'الحساب غير موجود' });
+        }
+
+        const sample = accounts[0];
+        const token = sample.accessToken;
+
+        let newStatus = 'active';
+        let errorMsg = null;
+        let newName = sample.fbUserName;
+        let newPic = sample.fbUserPicture;
+
+        try {
+            const fbRes = await fetch(`https://graph.facebook.com/v18.0/me?access_token=${token}&fields=id,name,picture.type(large)`);
+            const fbData = await fbRes.json();
+            if (fbData.error) {
+                const code = fbData.error.code;
+                const subcode = fbData.error.error_subcode;
+                if (code === 190 || subcode === 459 || subcode === 460 || subcode === 463 || subcode === 467) {
+                    newStatus = 'checkpoint';
+                } else {
+                    newStatus = 'error';
+                }
+                errorMsg = fbData.error.message;
+            } else {
+                newStatus = 'active';
+                if (fbData.name) newName = fbData.name;
+                if (fbData.picture?.data?.url) newPic = fbData.picture.data.url;
+            }
+        } catch (netErr) {
+            newStatus = 'error';
+            errorMsg = netErr.message;
+        }
+
+        // تحديث جميع السجلات التابعة لهذا المستخدم
+        await MessengerPageAccount.update(
+            {
+                status: newStatus,
+                lastError: errorMsg,
+                fbUserName: newName,
+                fbUserPicture: newPic
+            },
+            { where: { UserId: req.user.id, fbUserId } }
+        );
+
+        res.json({
+            success: true,
+            status: newStatus,
+            message: newStatus === 'active' ? '✅ الحساب شغال وسليم 100%' : `⚠️ تنبيه للحساب: ${errorMsg || newStatus}`
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+}
+
+// إيقاف أو تفعيل الحساب لجميع الصفحات التابع لها
+export async function toggleFbUser(req, res) {
+    try {
+        const { fbUserId } = req.params;
+        const accounts = await MessengerPageAccount.findAll({
+            where: { UserId: req.user.id, fbUserId }
+        });
+
+        if (!accounts || accounts.length === 0) {
+            return res.status(404).json({ success: false, message: 'الحساب غير موجود' });
+        }
+
+        const currentActive = accounts[0].isActive;
+        const newActive = !currentActive;
+
+        await MessengerPageAccount.update(
+            { isActive: newActive },
+            { where: { UserId: req.user.id, fbUserId } }
+        );
+
+        res.json({
+            success: true,
+            isActive: newActive,
+            message: newActive ? 'تم تفعيل الحساب لجميع الصفحات' : 'تم إيقاف الحساب مؤقتاً لجميع الصفحات'
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
+}
+
+// حذف وإلغاء ربط الحساب من جميع الصفحات
+export async function deleteFbUser(req, res) {
+    try {
+        const { fbUserId } = req.params;
+        const deleted = await MessengerPageAccount.destroy({
+            where: { UserId: req.user.id, fbUserId }
+        });
+
+        res.json({
+            success: true,
+            message: `تم إلغاء ربط الحساب بنجاح (${deleted} ارتباط)`
         });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
