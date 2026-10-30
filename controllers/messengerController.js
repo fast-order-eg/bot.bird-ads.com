@@ -1,4 +1,5 @@
 import fetch from 'node-fetch';
+import { Op } from 'sequelize';
 import { CONFIG } from '../config.js';
 import User from '../models/User.js';
 import Instruction from '../models/Instruction.js';
@@ -143,8 +144,16 @@ export async function executeWithFailover(pageId, apiFn) {
         console.error('[executeWithFailover] Error querying accounts:', e);
     }
 
-    // إذا لم توجد حسابات نشطة في الجدول، نلجأ إلى page.accessToken كـ Fallback
+    // إذا لم توجد حسابات نشطة في الجدول
     if (!accounts || accounts.length === 0) {
+        // نتحقق أولاً هل توجد حسابات مسجلة لهذه الصفحة ولكنها موقوفة أو معطلة
+        const totalRegistered = await MessengerPageAccount.count({ where: { pageId } });
+        if (totalRegistered > 0) {
+            console.log(`⏸️ [executeWithFailover] جميع حسابات الصفحة (${pageId}) موقوفة أو غير صالحة. تم إيقاف الرد.`);
+            return { error: 'All accounts for this page are paused or disabled' };
+        }
+
+        // إذا لم يكن هناك أي حسابات مسجلة مطلقاً، نلجأ إلى page.accessToken القديم كـ Fallback
         const page = await MessengerPage.findOne({ where: { pageId } });
         if (!page || !page.accessToken) {
             console.error(`[executeWithFailover] No access token found for page ${pageId}`);
@@ -890,9 +899,24 @@ export async function getPages(req, res) {
             }]
         });
 
+        const pageIds = pages.map(p => p.pageId);
+
+        // تأكد من مزامنة UserId لأي حساب مرتبط بصفحات هذا المستخدم
+        if (pageIds.length > 0) {
+            await MessengerPageAccount.update(
+                { UserId: req.user.id },
+                { where: { pageId: pageIds, UserId: { [Op.ne]: req.user.id } } }
+            );
+        }
+
         // جلب قائمة الحسابات الشخصية / مستخدمي النظام المميزين للأعلى
         const allAccounts = await MessengerPageAccount.findAll({
-            where: { UserId: req.user.id }
+            where: {
+                [Op.or]: [
+                    { pageId: pageIds },
+                    { UserId: req.user.id }
+                ]
+            }
         });
 
         const accountsMap = new Map();
@@ -1711,18 +1735,36 @@ export async function togglePageAccount(req, res) {
     }
 }
 
-// 2. حذف حساب من الصفحة
+// 2. حذف حساب من الصفحة (ولو كان الأدمن الوحيد للصفحة يتم حذف الصفحة تلقائياً)
 export async function deletePageAccount(req, res) {
     try {
         const { accountId } = req.params;
         const account = await MessengerPageAccount.findOne({
-            where: { id: accountId, UserId: req.user.id }
+            where: { id: accountId }
         });
         if (!account) return res.status(404).json({ success: false, message: 'الحساب غير موجود' });
 
         const name = account.fbUserName;
+        const pageId = account.pageId;
+        const pageName = account.pageName;
+
         await account.destroy();
-        res.json({ success: true, message: `🗑️ تم إزالة الحساب "${name}" من الصفحة بنجاح` });
+
+        // فحص هل ما زال هناك أي حسابات أدمن أخرى لهذه الصفحة
+        const remainingAccounts = await MessengerPageAccount.count({ where: { pageId } });
+        let deletedPage = false;
+        if (remainingAccounts === 0) {
+            // كان هذا الحساب هو الأدمن الوحيد -> احذف الصفحة تلقائياً
+            await MessengerPage.destroy({ where: { pageId } });
+            deletedPage = true;
+        }
+
+        let msg = `🗑️ تم إزالة الحساب "${name}" من الصفحة بنجاح`;
+        if (deletedPage) {
+            msg = `🗑️ تم حذف الحساب "${name}". وحيث أنه كان الأدمن الوحيد لصفحة "${pageName}"، فقد تم حذف الصفحة تلقائياً.`;
+        }
+
+        res.json({ success: true, message: msg, deletedPage, remainingAccounts });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }
@@ -1897,7 +1939,7 @@ export async function toggleFbUser(req, res) {
     try {
         const { fbUserId } = req.params;
         const accounts = await MessengerPageAccount.findAll({
-            where: { UserId: req.user.id, fbUserId }
+            where: { fbUserId }
         });
 
         if (!accounts || accounts.length === 0) {
@@ -1909,30 +1951,66 @@ export async function toggleFbUser(req, res) {
 
         await MessengerPageAccount.update(
             { isActive: newActive },
-            { where: { UserId: req.user.id, fbUserId } }
+            { where: { fbUserId } }
         );
 
         res.json({
             success: true,
             isActive: newActive,
-            message: newActive ? 'تم تفعيل الحساب لجميع الصفحات' : 'تم إيقاف الحساب مؤقتاً لجميع الصفحات'
+            message: newActive ? `✅ تم تشغيل الحساب "${accounts[0].fbUserName}" للرد في جميع الصفحات` : `⏸️ تم إيقاف الحساب "${accounts[0].fbUserName}" عن الرد في جميع الصفحات`
         });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
     }
 }
 
-// حذف وإلغاء ربط الحساب من جميع الصفحات
+// حذف وإلغاء ربط الحساب من جميع الصفحات (وإذا كان الأدمن الوحيد لأي صفحة، يتم حذف الصفحة تلقائياً)
 export async function deleteFbUser(req, res) {
     try {
         const { fbUserId } = req.params;
-        const deleted = await MessengerPageAccount.destroy({
-            where: { UserId: req.user.id, fbUserId }
+        const accounts = await MessengerPageAccount.findAll({
+            where: { fbUserId }
         });
+
+        if (!accounts || accounts.length === 0) {
+            return res.status(404).json({ success: false, message: 'الحساب غير موجود' });
+        }
+
+        const userName = accounts[0].fbUserName || 'حساب فيسبوك';
+        const pageIds = [...new Set(accounts.map(a => a.pageId))];
+
+        // حذف ارتباطات هذا الحساب
+        const deletedCount = await MessengerPageAccount.destroy({
+            where: { fbUserId }
+        });
+
+        // التحقق من الصفحات التي كان هذا الحساب أدمن عليها
+        const deletedPagesNames = [];
+        for (const pageId of pageIds) {
+            const remainingCount = await MessengerPageAccount.count({ where: { pageId } });
+            if (remainingCount === 0) {
+                // كان هذا الحساب هو الأدمن الوحيد لهذه الصفحة -> حذف الصفحة
+                const page = await MessengerPage.findOne({ where: { pageId } });
+                if (page) {
+                    deletedPagesNames.push(page.pageName);
+                    await page.destroy();
+                }
+            }
+        }
+
+        let msg = `🗑️ تم إلغاء ربط الحساب "${userName}" بنجاح.`;
+        if (deletedPagesNames.length > 0) {
+            msg = `🗑️ تم إلغاء ربط الحساب "${userName}" بنجاح. وحيث أنه كان الأدمن الوحيد للصفحات (${deletedPagesNames.join('، ')}), فقد تم حذف تلك الصفحات تلقائياً.`;
+        } else {
+            msg = `🗑️ تم إلغاء ربط الحساب "${userName}" من جميع الصفحات بنجاح (الصفحات ما زالت نشطة مع باقي الأدمن).`;
+        }
 
         res.json({
             success: true,
-            message: `تم إلغاء ربط الحساب بنجاح (${deleted} ارتباط)`
+            message: msg,
+            deletedCount,
+            deletedPagesCount: deletedPagesNames.length,
+            deletedPages: deletedPagesNames
         });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });

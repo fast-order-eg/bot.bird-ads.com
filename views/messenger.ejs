@@ -484,15 +484,19 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="d-flex align-items-center gap-1">
+                            <div class="d-flex align-items-center gap-2">
+                                <!-- سويتش تشغيل / إيقاف الحساب -->
+                                <div class="form-check form-switch mb-0 d-flex align-items-center gap-2" title="${acc.isActive ? 'الحساب شغال للرد - اضغط للإيقاف' : 'الحساب موقوف عن الرد - اضغط للتشغيل'}">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="top-switch-${acc.fbUserId}" ${acc.isActive ? 'checked' : ''} onchange="toggleFbUser('${acc.fbUserId}')" style="cursor:pointer; width: 44px; height: 22px;">
+                                    <label class="form-check-label small fw-bold ${acc.isActive ? 'text-success' : 'text-secondary'}" for="top-switch-${acc.fbUserId}" style="cursor:pointer; min-width: 65px;">
+                                        ${acc.isActive ? '🟢 ON (شغال)' : '⏸️ OFF (موقف)'}
+                                    </label>
+                                </div>
                                 <button class="btn btn-xs btn-outline-info py-1 px-2" style="font-size:0.75rem; border-radius:6px;" onclick="checkFbUserStatus('${acc.fbUserId}')" title="فحص حالة الحساب والتأكد من عدم قفله">
                                     🔄 فحص
                                 </button>
-                                <button class="btn btn-xs ${acc.isActive ? 'btn-outline-warning' : 'btn-outline-success'} py-1 px-2" style="font-size:0.75rem; border-radius:6px;" onclick="toggleFbUser('${acc.fbUserId}')" title="${acc.isActive ? 'إيقاف مؤقت' : 'تشغيل'}">
-                                    ${acc.isActive ? '⏸️ إيقاف' : '▶️ تشغيل'}
-                                </button>
-                                <button class="btn btn-xs btn-outline-danger py-1 px-2" style="font-size:0.75rem; border-radius:6px;" onclick="deleteFbUser('${acc.fbUserId}', '${safeAccName}')" title="إلغاء ربط هذا الحساب من كل الصفحات">
-                                    🗑️ حذف
+                                <button class="btn btn-xs btn-outline-danger py-1 px-2" style="font-size:0.75rem; border-radius:6px;" onclick="deleteFbUser('${acc.fbUserId}', '${safeAccName}')" title="حذف هذا الحساب وإلغاء ربطه من جميع الصفحات">
+                                    🗑️ حذف الحساب
                                 </button>
                             </div>
                         </div>
@@ -581,13 +585,17 @@
                                 </div>
                             </div>
                             <div class="d-flex align-items-center gap-1">
+                                <!-- سويتش تشغيل / إيقاف الحساب في هذه الصفحة -->
+                                <div class="form-check form-switch mb-0 d-flex align-items-center" title="${acc.isActive ? 'الحساب شغال للرد في هذه الصفحة - اضغط للإيقاف' : 'الحساب موقوف عن الرد في هذه الصفحة - اضغط للتشغيل'}">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="card-switch-${acc.id}" ${acc.isActive ? 'checked' : ''} onchange="toggleAccount(${acc.id})" style="cursor:pointer; width: 34px; height: 18px;">
+                                    <span class="small fw-bold ms-1 ${acc.isActive ? 'text-success' : 'text-secondary'}" style="font-size:0.65rem;">
+                                        ${acc.isActive ? 'ON' : 'OFF'}
+                                    </span>
+                                </div>
                                 <button class="btn btn-xs btn-outline-info p-1 px-2" style="border-radius:6px;" title="فحص حالة الرمز الآن" onclick="checkAccountStatus(${acc.id}, this)">
                                     🔄
                                 </button>
-                                <button class="btn btn-xs ${acc.isActive ? 'btn-outline-warning' : 'btn-outline-success'} p-1 px-2" style="border-radius:6px;" title="${acc.isActive ? 'إيقاف مؤقت' : 'تفعيل'}" onclick="toggleAccount(${acc.id})">
-                                    ${acc.isActive ? '⏸️' : '▶️'}
-                                </button>
-                                <button class="btn btn-xs btn-outline-danger p-1 px-2" style="border-radius:6px;" title="إزالة هذا الحساب" onclick="deleteAccount(${acc.id}, '${safeAccName}')">
+                                <button class="btn btn-xs btn-outline-danger p-1 px-2" style="border-radius:6px;" title="إزالة هذا الحساب من هذه الصفحة" onclick="deleteAccount(${acc.id}, '${safeAccName}')">
                                     🗑️
                                 </button>
                             </div>
@@ -899,7 +907,7 @@
 
         async function deleteAccount(accountId, safeName) {
             const name = decodeURIComponent(safeName);
-            if (!confirm(`هل أنت متأكد من حذف الحساب "${name}" من قائمة الردود لهذه الصفحة؟`)) return;
+            if (!confirm(`هل أنت متأكد من حذف الحساب "${name}" من هذه الصفحة؟\n\nتنبيه: إذا كان هذا هو الأدمن الوحيد للصفحة، فسيتم حذف الصفحة بالكامل تلقائياً!`)) return;
             try {
                 const res = await fetch(`/api/messenger/account/${accountId}`, { method: 'DELETE' });
                 const data = await res.json();
@@ -948,7 +956,7 @@
 
         async function deleteFbUser(fbUserId, safeName) {
             const name = decodeURIComponent(safeName || 'الحساب');
-            if (!confirm(`هل أنت متأكد من إلغاء ربط الحساب "${name}" وحذفه من جميع الصفحات؟`)) return;
+            if (!confirm(`هل أنت متأكد من إلغاء ربط الحساب "${name}" وحذفه من جميع الصفحات؟\n\nتنبيه: أي صفحة كان هذا الحساب هو الأدمن الوحيد لها، سيتم حذفها بالكامل تلقائياً!`)) return;
             try {
                 const res = await fetch(`/api/messenger/fb-user/${fbUserId}`, { method: 'DELETE' });
                 const data = await res.json();
