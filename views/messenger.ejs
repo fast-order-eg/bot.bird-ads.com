@@ -28,6 +28,118 @@
         #toast-container { position: fixed; bottom: 20px; left: 20px; z-index: 9999; }
         .copy-btn { cursor: pointer; font-size: 0.75rem; }
         .copy-btn:hover { color: #0dcaf0; }
+
+        /* تنسيقات متجاوبة وعصرية لبطاقات وتحكم الحسابات على الموبايل والكمبيوتر */
+        .account-card-row {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 10px 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            transition: all 0.2s ease;
+        }
+        .account-card-row:hover {
+            background: rgba(255, 255, 255, 0.07);
+        }
+        .account-card-row.checkpoint {
+            border-color: rgba(220, 53, 69, 0.45);
+            background: rgba(220, 53, 69, 0.06);
+        }
+        .account-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+            flex: 1;
+        }
+        .account-info-text {
+            min-width: 0;
+            flex: 1;
+        }
+        .account-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+        .account-btn-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: rgba(255, 255, 255, 0.05);
+            color: #e0e0e0;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .account-btn-icon:hover {
+            transform: translateY(-1px);
+        }
+        .account-btn-icon.btn-check {
+            color: #0dcaf0;
+            border-color: rgba(13, 202, 240, 0.3);
+            background: rgba(13, 202, 240, 0.1);
+        }
+        .account-btn-icon.btn-check:hover {
+            background: rgba(13, 202, 240, 0.22);
+            color: #fff;
+        }
+        .account-btn-icon.btn-delete {
+            color: #ea868f;
+            border-color: rgba(220, 53, 69, 0.3);
+            background: rgba(220, 53, 69, 0.1);
+        }
+        .account-btn-icon.btn-delete:hover {
+            background: rgba(220, 53, 69, 0.25);
+            color: #ff4d5e;
+        }
+        .account-switch {
+            cursor: pointer;
+            width: 38px !important;
+            height: 20px !important;
+            margin: 0 !important;
+        }
+        .account-switch:checked {
+            background-color: #198754 !important;
+            border-color: #198754 !important;
+            box-shadow: 0 0 8px rgba(25, 135, 84, 0.5) !important;
+        }
+        @media (max-width: 576px) {
+            .account-card-row {
+                padding: 8px 10px;
+                gap: 8px;
+            }
+            .account-info {
+                gap: 8px;
+            }
+            .account-info img {
+                width: 32px !important;
+                height: 32px !important;
+            }
+            .account-actions {
+                gap: 6px;
+            }
+            .account-btn-icon {
+                width: 30px;
+                height: 30px;
+                border-radius: 6px;
+            }
+            .account-btn-icon svg {
+                width: 13px;
+                height: 13px;
+            }
+            .account-switch {
+                width: 34px !important;
+                height: 18px !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -468,35 +580,32 @@
                         const safeAccName = encodeURIComponent(acc.fbUserName || 'حساب');
 
                         return `
-                        <div class="d-flex justify-content-between align-items-center p-2 rounded-3 flex-wrap gap-2" style="background: rgba(255,255,255,0.04); border: 1px solid ${isBanned ? 'rgba(220,53,69,0.4)' : 'rgba(255,255,255,0.08)'};">
-                            <div class="d-flex align-items-center gap-2">
+                        <div class="account-card-row mb-2 ${isBanned ? 'checkpoint' : ''}">
+                            <div class="account-info">
                                 <img src="${acc.fbUserPicture || 'https://cdn-icons-png.flaticon.com/512/149/149071.png'}" 
                                      alt="${acc.fbUserName}" class="rounded-circle border" style="width: 38px; height: 38px; object-fit: cover; border-color: ${isBanned ? '#dc3545' : '#0866ff'} !important;">
-                                <div>
-                                    <div class="d-flex align-items-center gap-2 flex-wrap">
-                                        <span class="text-white fw-bold small">${acc.fbUserName}</span>
-                                        ${isSys ? '<span class="badge bg-info text-dark" style="font-size:0.65rem;">⚡ مستخدم نظام</span>' : '<span class="badge bg-primary bg-opacity-75 text-white" style="font-size:0.65rem;">👤 فيسبوك</span>'}
+                                <div class="account-info-text text-truncate">
+                                    <div class="d-flex align-items-center gap-1 flex-wrap">
+                                        <span class="text-white fw-bold small text-truncate" style="max-width: 140px;">${acc.fbUserName}</span>
+                                        ${isSys ? '<span class="badge bg-info text-dark" style="font-size:0.6rem;">⚡ نظام</span>' : '<span class="badge bg-primary bg-opacity-75 text-white" style="font-size:0.6rem;">👤 فيسبوك</span>'}
                                         ${statusBadge}
                                     </div>
-                                    <div class="text-white-50" style="font-size: 0.72rem;">
+                                    <div class="text-white-50 text-truncate" style="font-size: 0.72rem;">
                                         ${pagesText}
                                         ${acc.lastError ? `<span class="text-danger ms-1">(${acc.lastError})</span>` : ''}
                                     </div>
                                 </div>
                             </div>
-                            <div class="d-flex align-items-center gap-2">
-                                <!-- سويتش تشغيل / إيقاف الحساب -->
-                                <div class="form-check form-switch mb-0 d-flex align-items-center gap-2" title="${acc.isActive ? 'الحساب شغال للرد - اضغط للإيقاف' : 'الحساب موقوف عن الرد - اضغط للتشغيل'}">
-                                    <input class="form-check-input" type="checkbox" role="switch" id="top-switch-${acc.fbUserId}" ${acc.isActive ? 'checked' : ''} onchange="toggleFbUser('${acc.fbUserId}')" style="cursor:pointer; width: 44px; height: 22px;">
-                                    <label class="form-check-label small fw-bold ${acc.isActive ? 'text-success' : 'text-secondary'}" for="top-switch-${acc.fbUserId}" style="cursor:pointer; min-width: 65px;">
-                                        ${acc.isActive ? '🟢 ON (شغال)' : '⏸️ OFF (موقف)'}
-                                    </label>
+                            <div class="account-actions">
+                                <!-- سويتش تشغيل / إيقاف الحساب بدون أي نصوص زائدة -->
+                                <div class="form-check form-switch mb-0" title="${acc.isActive ? 'الحساب شغال للرد - اضغط للإيقاف' : 'الحساب موقوف عن الرد - اضغط للتشغيل'}">
+                                    <input class="form-check-input account-switch" type="checkbox" role="switch" id="top-switch-${acc.fbUserId}" ${acc.isActive ? 'checked' : ''} onchange="toggleFbUser('${acc.fbUserId}')">
                                 </div>
-                                <button class="btn btn-xs btn-outline-info py-1 px-2" style="font-size:0.75rem; border-radius:6px;" onclick="checkFbUserStatus('${acc.fbUserId}')" title="فحص حالة الحساب والتأكد من عدم قفله">
-                                    🔄 فحص
+                                <button class="account-btn-icon btn-check" onclick="checkFbUserStatus('${acc.fbUserId}', this)" title="فحص حالة الحساب">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
                                 </button>
-                                <button class="btn btn-xs btn-outline-danger py-1 px-2" style="font-size:0.75rem; border-radius:6px;" onclick="deleteFbUser('${acc.fbUserId}', '${safeAccName}')" title="حذف هذا الحساب وإلغاء ربطه من جميع الصفحات">
-                                    🗑️ حذف الحساب
+                                <button class="account-btn-icon btn-delete" onclick="deleteFbUser('${acc.fbUserId}', '${safeAccName}')" title="حذف هذا الحساب وإلغاء ربطه">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                                 </button>
                             </div>
                         </div>
@@ -571,11 +680,11 @@
                         const safeAccName = encodeURIComponent(acc.fbUserName);
 
                         return `
-                        <div class="d-flex align-items-center justify-content-between p-2 rounded gap-2 ${borderClass}" style="background: rgba(0,0,0,0.35); border: 1px solid; flex: 1 1 calc(50% - 0.5rem); min-width: 240px;">
-                            <div class="d-flex align-items-center gap-2">
-                                <img src="${pic}" style="width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 2px solid ${acc.status === 'checkpoint' ? '#dc3545' : (acc.isActive ? '#198754' : '#6c757d')};">
-                                <div style="line-height: 1.2;">
-                                    <div class="text-white small fw-bold text-truncate" style="max-width: 130px;" title="${acc.fbUserName}">
+                        <div class="account-card-row ${borderClass}" style="flex: 1 1 calc(50% - 0.5rem); min-width: 220px; padding: 7px 10px;">
+                            <div class="account-info">
+                                <img src="${pic}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid ${acc.status === 'checkpoint' ? '#dc3545' : (acc.isActive ? '#198754' : '#6c757d')};">
+                                <div class="account-info-text text-truncate" style="line-height: 1.2;">
+                                    <div class="text-white small fw-bold text-truncate" style="max-width: 120px;" title="${acc.fbUserName}">
                                         ${acc.fbUserName}
                                     </div>
                                     <div class="d-flex align-items-center gap-1 mt-1">
@@ -584,19 +693,16 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="d-flex align-items-center gap-1">
-                                <!-- سويتش تشغيل / إيقاف الحساب في هذه الصفحة -->
-                                <div class="form-check form-switch mb-0 d-flex align-items-center" title="${acc.isActive ? 'الحساب شغال للرد في هذه الصفحة - اضغط للإيقاف' : 'الحساب موقوف عن الرد في هذه الصفحة - اضغط للتشغيل'}">
-                                    <input class="form-check-input" type="checkbox" role="switch" id="card-switch-${acc.id}" ${acc.isActive ? 'checked' : ''} onchange="toggleAccount(${acc.id})" style="cursor:pointer; width: 34px; height: 18px;">
-                                    <span class="small fw-bold ms-1 ${acc.isActive ? 'text-success' : 'text-secondary'}" style="font-size:0.65rem;">
-                                        ${acc.isActive ? 'ON' : 'OFF'}
-                                    </span>
+                            <div class="account-actions">
+                                <!-- سويتش تشغيل / إيقاف الحساب في هذه الصفحة بدون نصوص -->
+                                <div class="form-check form-switch mb-0" title="${acc.isActive ? 'الحساب شغال للرد في هذه الصفحة - اضغط للإيقاف' : 'الحساب موقوف عن الرد في هذه الصفحة - اضغط للتشغيل'}">
+                                    <input class="form-check-input account-switch" type="checkbox" role="switch" id="card-switch-${acc.id}" ${acc.isActive ? 'checked' : ''} onchange="toggleAccount(${acc.id})" style="width: 34px !important; height: 18px !important;">
                                 </div>
-                                <button class="btn btn-xs btn-outline-info p-1 px-2" style="border-radius:6px;" title="فحص حالة الرمز الآن" onclick="checkAccountStatus(${acc.id}, this)">
-                                    🔄
+                                <button class="account-btn-icon btn-check" style="width: 28px; height: 28px;" title="فحص حالة الرمز الآن" onclick="checkAccountStatus(${acc.id}, this)">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
                                 </button>
-                                <button class="btn btn-xs btn-outline-danger p-1 px-2" style="border-radius:6px;" title="إزالة هذا الحساب من هذه الصفحة" onclick="deleteAccount(${acc.id}, '${safeAccName}')">
-                                    🗑️
+                                <button class="account-btn-icon btn-delete" style="width: 28px; height: 28px;" title="إزالة هذا الحساب من هذه الصفحة" onclick="deleteAccount(${acc.id}, '${safeAccName}')">
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                                 </button>
                             </div>
                         </div>
@@ -923,7 +1029,13 @@
         }
 
         // ====== دوال التحكم في الحسابات الرئيسية بالأعلى ======
-        async function checkFbUserStatus(fbUserId) {
+        async function checkFbUserStatus(fbUserId, btn) {
+            let origHtml = '';
+            if (btn) {
+                origHtml = btn.innerHTML;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm" style="width:11px;height:11px;"></span>';
+                btn.disabled = true;
+            }
             showToast('جاري فحص حالة الحساب من فيسبوك...', 'info');
             try {
                 const res = await fetch(`/api/messenger/fb-user/${fbUserId}/check`, { method: 'POST' });
@@ -936,6 +1048,11 @@
                 }
             } catch (e) {
                 showToast('خطأ في الاتصال بالسيرفر', 'danger');
+            } finally {
+                if (btn) {
+                    btn.innerHTML = origHtml;
+                    btn.disabled = false;
+                }
             }
         }
 
