@@ -1876,58 +1876,46 @@ export async function checkFbUserStatus(req, res) {
     try {
         const { fbUserId } = req.params;
         const accounts = await MessengerPageAccount.findAll({
-            where: { UserId: req.user.id, fbUserId }
+            where: { fbUserId }
         });
 
         if (!accounts || accounts.length === 0) {
             return res.status(404).json({ success: false, message: 'الحساب غير موجود' });
         }
 
-        const sample = accounts[0];
-        const token = sample.accessToken;
+        let anyFailed = false;
+        let lastErrorMsg = null;
+        let overallStatus = 'active';
 
-        let newStatus = 'active';
-        let errorMsg = null;
-        let newName = sample.fbUserName;
-        let newPic = sample.fbUserPicture;
-
-        try {
-            const fbRes = await fetch(`https://graph.facebook.com/v18.0/me?access_token=${token}&fields=id,name,picture.type(large)`);
-            const fbData = await fbRes.json();
-            if (fbData.error) {
-                const code = fbData.error.code;
-                const subcode = fbData.error.error_subcode;
-                if (code === 190 || subcode === 459 || subcode === 460 || subcode === 463 || subcode === 467) {
-                    newStatus = 'checkpoint';
+        for (const acc of accounts) {
+            try {
+                const fbRes = await fetch(`https://graph.facebook.com/v18.0/me?access_token=${acc.accessToken}&fields=id,name,picture.type(large)`);
+                const fbData = await fbRes.json();
+                if (fbData.error) {
+                    anyFailed = true;
+                    const code = fbData.error.code;
+                    const subcode = fbData.error.error_subcode;
+                    const st = (code === 190 || subcode === 459 || subcode === 460 || subcode === 463 || subcode === 467) ? 'checkpoint' : 'error';
+                    lastErrorMsg = fbData.error.message;
+                    overallStatus = st;
+                    await acc.update({ status: st, lastError: fbData.error.message });
                 } else {
-                    newStatus = 'error';
+                    let updateFields = { status: 'active', lastError: null };
+                    if (fbData.name && !acc.isSystemUser) updateFields.fbUserName = fbData.name;
+                    if (fbData.picture?.data?.url && !acc.isSystemUser) updateFields.fbUserPicture = fbData.picture.data.url;
+                    await acc.update(updateFields);
                 }
-                errorMsg = fbData.error.message;
-            } else {
-                newStatus = 'active';
-                if (fbData.name) newName = fbData.name;
-                if (fbData.picture?.data?.url) newPic = fbData.picture.data.url;
+            } catch (err) {
+                anyFailed = true;
+                lastErrorMsg = err.message;
+                await acc.update({ status: 'error', lastError: err.message });
             }
-        } catch (netErr) {
-            newStatus = 'error';
-            errorMsg = netErr.message;
         }
-
-        // تحديث جميع السجلات التابعة لهذا المستخدم
-        await MessengerPageAccount.update(
-            {
-                status: newStatus,
-                lastError: errorMsg,
-                fbUserName: newName,
-                fbUserPicture: newPic
-            },
-            { where: { UserId: req.user.id, fbUserId } }
-        );
 
         res.json({
             success: true,
-            status: newStatus,
-            message: newStatus === 'active' ? '✅ الحساب شغال وسليم 100%' : `⚠️ تنبيه للحساب: ${errorMsg || newStatus}`
+            status: anyFailed ? overallStatus : 'active',
+            message: anyFailed ? `⚠️ تنبيه للحساب: ${lastErrorMsg || 'حدث خطأ في بعض الصفحات'}` : '✅ الحساب شغال وسليم 100% في جميع الصفحات'
         });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });

@@ -82,14 +82,15 @@
         .account-btn-icon:hover {
             transform: translateY(-1px);
         }
-        .account-btn-icon.btn-check {
+        .account-btn-icon.btn-refresh-status {
             color: #0dcaf0;
-            border-color: rgba(13, 202, 240, 0.3);
-            background: rgba(13, 202, 240, 0.1);
+            border-color: rgba(13, 202, 240, 0.35);
+            background: rgba(13, 202, 240, 0.12);
         }
-        .account-btn-icon.btn-check:hover {
-            background: rgba(13, 202, 240, 0.22);
+        .account-btn-icon.btn-refresh-status:hover {
+            background: rgba(13, 202, 240, 0.28);
             color: #fff;
+            box-shadow: 0 0 10px rgba(13, 202, 240, 0.4);
         }
         .account-btn-icon.btn-delete {
             color: #ea868f;
@@ -601,7 +602,7 @@
                                 <div class="form-check form-switch mb-0" title="${acc.isActive ? 'الحساب شغال للرد - اضغط للإيقاف' : 'الحساب موقوف عن الرد - اضغط للتشغيل'}">
                                     <input class="form-check-input account-switch" type="checkbox" role="switch" id="top-switch-${acc.fbUserId}" ${acc.isActive ? 'checked' : ''} onchange="toggleFbUser('${acc.fbUserId}')">
                                 </div>
-                                <button class="account-btn-icon btn-check" onclick="checkFbUserStatus('${acc.fbUserId}', this)" title="فحص حالة الحساب">
+                                <button class="account-btn-icon btn-refresh-status" onclick="checkFbUserStatus('${acc.fbUserId}', this)" title="فحص وتحديث حالة الحساب الآن من فيسبوك">
                                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
                                 </button>
                                 <button class="account-btn-icon btn-delete" onclick="deleteFbUser('${acc.fbUserId}', '${safeAccName}')" title="حذف هذا الحساب وإلغاء ربطه">
@@ -698,7 +699,7 @@
                                 <div class="form-check form-switch mb-0" title="${acc.isActive ? 'الحساب شغال للرد في هذه الصفحة - اضغط للإيقاف' : 'الحساب موقوف عن الرد في هذه الصفحة - اضغط للتشغيل'}">
                                     <input class="form-check-input account-switch" type="checkbox" role="switch" id="card-switch-${acc.id}" ${acc.isActive ? 'checked' : ''} onchange="toggleAccount(${acc.id})" style="width: 34px !important; height: 18px !important;">
                                 </div>
-                                <button class="account-btn-icon btn-check" style="width: 28px; height: 28px;" title="فحص حالة الرمز الآن" onclick="checkAccountStatus(${acc.id}, this)">
+                                <button class="account-btn-icon btn-refresh-status" style="width: 28px; height: 28px;" title="فحص حالة الرمز الآن" onclick="checkAccountStatus(${acc.id}, this)">
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>
                                 </button>
                                 <button class="account-btn-icon btn-delete" style="width: 28px; height: 28px;" title="إزالة هذا الحساب من هذه الصفحة" onclick="deleteAccount(${acc.id}, '${safeAccName}')">
