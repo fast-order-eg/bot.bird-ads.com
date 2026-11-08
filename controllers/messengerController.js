@@ -1901,8 +1901,10 @@ export async function checkFbUserStatus(req, res) {
                     await acc.update({ status: st, lastError: fbData.error.message });
                 } else {
                     let updateFields = { status: 'active', lastError: null };
-                    if (fbData.name && !acc.isSystemUser) updateFields.fbUserName = fbData.name;
-                    if (fbData.picture?.data?.url && !acc.isSystemUser) updateFields.fbUserPicture = fbData.picture.data.url;
+                    // إذا كان الاسم العائد هو اسم الصفحة نفسها (لأن التوكن Page Token)، لا نغير اسم الحساب البشري
+                    const isPageName = String(fbData.id) === String(acc.pageId);
+                    if (fbData.name && !acc.isSystemUser && !isPageName) updateFields.fbUserName = fbData.name;
+                    if (fbData.picture?.data?.url && !acc.isSystemUser && !isPageName) updateFields.fbUserPicture = fbData.picture.data.url;
                     await acc.update(updateFields);
                 }
             } catch (err) {
